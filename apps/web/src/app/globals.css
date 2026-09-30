@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --bg-paper: #fbfaf7;
+  --bg-card: #ffffff;
+  --text-ink: #141b2d;
+  --text-muted: #526077;
+  --civic-primary: #0f4c81;
+  --civic-accent: #0284c7;
+  --skill-gold: #d97706;
+  --verified-emerald: #059669;
+  --border-subtle: #e5e1d8;
+  --border-strong: #cbd5e1;
+}
+
+body {
+  background-color: var(--bg-paper);
+  color: var(--text-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Devanagari", "Noto Sans", sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Accessible focus ring */
+*:focus-visible {
+  outline: 2px solid var(--civic-primary);
+  outline-offset: 2px;
+}
+
+/* Button & Touch Target minimums (48px for low-literacy accessibility) */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Smooth waveform pulsing animation */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s infinite ease-in-out;
+}

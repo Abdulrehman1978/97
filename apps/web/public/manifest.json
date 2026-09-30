@@ -1,0 +1,17 @@
+{
+  "name": "PM-AJAY Livelihood Intelligence Platform",
+  "short_name": "LIP Skilling",
+  "description": "AI-Driven Voice Assistant for Livelihood Mapping & NSQF-Aligned Skilling Recommendations under PM-AJAY GIA (SIH26097)",
+  "start_url": "/interview",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f4c81",
+  "theme_color": "#0f4c81",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

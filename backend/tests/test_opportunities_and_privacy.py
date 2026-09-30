@@ -1,0 +1,50 @@
+import pytest
+from fastapi.testclient import TestClient
+from backend.app.main import app
+
+client = TestClient(app)
+
+def test_list_training_options_and_centers():
+    res = client.get("/api/v1/opportunities/training-options?district_code=MH-NAG")
+    assert res.status_code == 200
+    options = res.json()
+    assert len(options) > 0
+    # Must contain truth_state and verification status
+    first = options[0]
+    assert "truth_state" in first
+    assert "is_verified_live_batch" in first
+
+def test_candidate_matching_with_strict_caste_isolation():
+    """Verify Section 8.17 & 13.3: Employers never receive caste or sensitive social identity."""
+    res = client.get("/api/v1/opportunities/candidates?district_code=MH-NAG")
+    assert res.status_code == 200
+    candidates = res.json()
+    assert len(candidates) > 0
+    
+    for can in candidates:
+        # Strict privacy check
+        assert "caste" not in can
+        assert "social_category" not in can
+        assert "caste_category" not in can
+        assert "candidate_id" in can
+        assert "verified_skills" in can
+        assert "education" in can
+        assert "privacy_notice" in can
+
+def test_create_and_update_application():
+    # Submit application
+    app_res = client.post("/api/v1/opportunities/apply", json={
+        "beneficiary_id": "test-b-1",
+        "opportunity_id": None,
+        "training_option_id": "test-opt-1",
+        "application_type": "training"
+    })
+    assert app_res.status_code == 200
+    app_id = app_res.json()["application_id"]
+    
+    # Update status
+    up_res = client.put(f"/api/v1/opportunities/applications/{app_id}/status", json={
+        "status": "shortlisted"
+    })
+    assert up_res.status_code == 200
+    assert up_res.json()["new_status"] == "shortlisted"
