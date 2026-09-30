@@ -1,20 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { TruthBadge } from "@/components/TruthBadge";
-import { Wrench, ShieldCheck, CheckCircle2, ArrowRight, Award, QrCode, FileText } from "lucide-react";
+import { Wrench, ShieldCheck, CheckCircle2, ArrowRight, Award, QrCode, FileText, RefreshCw, AlertCircle } from "lucide-react";
+import { getLivelihoodPassport } from "@/lib/api";
 
 export default function PassportPage() {
   const [activeTab, setActiveTab] = useState<"skills" | "experience" | "rpl">("skills");
-
-  const passportData = {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [passportData, setPassportData] = useState<any>({
     beneficiary_name: "Ramesh Mesram",
     district: "Nagpur (MH)",
     primary_trade: "Two-Wheeler Maintenance & Service",
+    qr_code_token: "LIP-MH-NAG-2026",
     skills: [
       { name: "Two-Wheeler Engine Overhaul", category: "Mechanical", level: "Competent", confidence: 92, status: "Verified" },
       { name: "Brake Shoe & Disc Maintenance", category: "Mechanical", level: "Competent", confidence: 95, status: "Verified" },
@@ -36,7 +39,51 @@ export default function PassportPage() {
       bridge_hours: 30,
       benefit: "४५० तासांचा पूर्ण वर्ग न करता थेट शासकीय NSQF प्रमाणपत्र मिळवण्यास पात्र."
     }
+  });
+
+  const loadPassport = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
+      const idToFetch = storedId || "demo-beneficiary-id";
+      const apiPassport = await getLivelihoodPassport(idToFetch);
+      
+      setPassportData({
+        beneficiary_name: apiPassport.full_name || "Ramesh Mesram",
+        district: `${apiPassport.district_code || "MH-NAG"} (MH)`,
+        primary_trade: "Two-Wheeler Maintenance & Service",
+        qr_code_token: apiPassport.qr_code_token || "LIP-MH-NAG-2026",
+        skills: apiPassport.skills && apiPassport.skills.length > 0
+          ? apiPassport.skills.map((s: any) => ({
+              name: s.canonical_name,
+              category: s.category,
+              level: s.proficiency_band === "competent" ? "Competent" : "Bridge Needed",
+              confidence: Math.round((s.confidence_score || 0.9) * 100),
+              status: s.verification_status === "beneficiary_confirmed" ? "Verified" : "Pending"
+            }))
+          : passportData.skills,
+        experience: apiPassport.work_experiences && apiPassport.work_experiences.length > 0
+          ? {
+              title: apiPassport.work_experiences[0].title,
+              duration: `${apiPassport.work_experiences[0].duration_months || 36} Months`,
+              tasks: apiPassport.work_experiences[0].tasks || ["इंजिन उघडणे", "ब्रेक काम"],
+              tools: apiPassport.work_experiences[0].tools || ["Spanners", "Wrench"]
+            }
+          : passportData.experience,
+        rpl: passportData.rpl
+      });
+    } catch (e: any) {
+      console.warn("Passport API fetch error, retaining structured seed baseline:", e);
+      // Retain seeded baseline for hero demo resilience
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    loadPassport();
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-24 md:pb-12">
@@ -108,7 +155,7 @@ export default function PassportPage() {
         {/* Skills Tab Content */}
         {activeTab === "skills" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {passportData.skills.map((s, idx) => (
+            {passportData.skills?.map((s: any, idx: number) => (
               <div key={idx} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
@@ -188,7 +235,7 @@ export default function PassportPage() {
                 दररोज हाताळलेली कामे (Tasks Performed):
               </h3>
               <div className="flex flex-wrap gap-2">
-                {passportData.experience.tasks.map((t, i) => (
+                {passportData.experience.tasks?.map((t: any, i: number) => (
                   <span key={i} className="text-xs font-medium bg-slate-50 border border-slate-200 px-3 py-1 rounded-lg text-slate-700">
                     ✓ {t}
                   </span>
@@ -201,7 +248,7 @@ export default function PassportPage() {
                 वापरलेली अवजारे (Tools Used):
               </h3>
               <div className="flex flex-wrap gap-2">
-                {passportData.experience.tools.map((tl, i) => (
+                {passportData.experience.tools?.map((tl: any, i: number) => (
                   <span key={i} className="text-xs font-medium bg-sky-50 border border-sky-200 px-3 py-1 rounded-lg text-sky-800">
                     🔧 {tl}
                   </span>

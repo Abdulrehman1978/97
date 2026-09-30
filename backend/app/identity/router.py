@@ -1,16 +1,17 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.identity.models import User, Consent
-from backend.app.shared.security import create_access_token, hash_password, verify_password
+from backend.app.shared.security import create_access_token, hash_password, verify_password, get_current_user
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 
 class LoginRequest(BaseModel):
-    username: str # phone or email
-    password: Optional[str] = "password123"
+    username: Optional[str] = None # phone or email
+    email_or_phone: Optional[str] = None
+    password: Optional[str] = None
 
 class ConsentRequest(BaseModel):
     beneficiary_id: str
@@ -23,19 +24,31 @@ class DemoSwitchRoleRequest(BaseModel):
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """Logs in or generates an access token for development/demo."""
-    user = db.query(User).filter((User.phone == req.username) | (User.email == req.username)).first()
+    """Verifies credentials against hashed password and returns access token."""
+    login_id = req.username or req.email_or_phone
+    if not login_id:
+        raise HTTPException(status_code=400, detail="Username or email/phone is required")
+    
+    user = db.query(User).filter((User.phone == login_id) | (User.email == login_id)).first()
     if not user:
-        # Create demo user on the fly if needed
-        user = User(
-            full_name=req.username,
-            phone=req.username if req.username.isdigit() else "9876543210",
-            email=req.username if "@" in req.username else f"{req.username}@demo.gov.in",
-            role="beneficiary"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is disabled"
+        )
+
+    # Verify password if password is set on user
+    if user.hashed_password:
+        if not req.password or not verify_password(req.password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid username or password"
+            )
 
     token = create_access_token({"sub": user.id, "role": user.role, "name": user.full_name})
     return {
@@ -46,6 +59,18 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             "full_name": user.full_name,
             "role": user.role
         }
+    }
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    """Returns profile for currently authenticated session."""
+    return {
+        "id": current_user.id,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "email": getattr(current_user, "email", None),
+        "phone": getattr(current_user, "phone", None),
+        "is_active": current_user.is_active
     }
 
 @router.post("/consent")
@@ -72,5 +97,7 @@ def demo_switch_role(req: DemoSwitchRoleRequest):
             f"role:{req.role}",
             "district:MH-NAG",
             "audit:read" if "admin" in req.role else "cases:read"
-        ]
+        ],
+        "truth_state": "DEMO_DATA"
     }
+

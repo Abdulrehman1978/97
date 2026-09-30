@@ -17,6 +17,31 @@ from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, Work
 from backend.app.knowledge.models import Skill, SkillAlias, Occupation, OccupationSkill, Qualification, QualificationCompetency, OccupationQualification, Program
 from backend.app.opportunities.models import AdminArea, TrainingCenter, TrainingOption, EmployerOpportunity, LocalEconomicSignal
 from backend.app.admin.models import Source, AuditEvent
+from backend.app.shared.security import hash_password
+
+def ensure_authenticated_users(db):
+    users_to_ensure = [
+        {"email": "admin@nagpur.gov.in", "phone": "9000000001", "full_name": "Nagpur District Skill Committee Admin", "role": "district_admin", "password": "admin123"},
+        {"email": "worker@nagpur.gov.in", "phone": "9000000002", "full_name": "Sunita Patil (Field Mobilizer)", "role": "field_worker", "password": "worker123"},
+        {"email": "counsellor@nagpur.gov.in", "phone": "9000000003", "full_name": "Dr. Aniket Deshmukh (Livelihood Counsellor)", "role": "counsellor", "password": "counsel123"},
+        {"email": "finance@nagpur.gov.in", "phone": "9000000004", "full_name": "Pooja Sharma (Lead Bank Financial Counsellor)", "role": "financial_counsellor", "password": "finance123"},
+        {"email": "provider@pmkk.gov.in", "phone": "9000000005", "full_name": "Vidarbha Skills Center Coordinator", "role": "provider", "password": "provider123"},
+        {"email": "employer@mahavitaran.com", "phone": "9000000006", "full_name": "Bajaj & Mahindra Auto HR Representative", "role": "employer", "password": "employer123"},
+        {"email": "ramesh@beneficiary.lip", "phone": "9876543210", "full_name": "Ramesh Mesram", "role": "beneficiary", "password": "ramesh123"}
+    ]
+    for u_spec in users_to_ensure:
+        u = db.query(User).filter((User.email == u_spec["email"]) | (User.phone == u_spec["phone"])).first()
+        if not u:
+            u = User(
+                email=u_spec["email"],
+                phone=u_spec["phone"],
+                full_name=u_spec["full_name"],
+                role=u_spec["role"],
+                hashed_password=hash_password(u_spec["password"]),
+                is_active=True
+            )
+            db.add(u)
+    db.commit()
 
 def seed_database():
     print("Creating all tables...")
@@ -24,6 +49,8 @@ def seed_database():
     
     db = SessionLocal()
     try:
+        ensure_authenticated_users(db)
+
         # Check if already seeded
         if db.query(Skill).first():
             print("Database already contains data. Skipping re-seed.")
@@ -299,13 +326,13 @@ def seed_database():
         db.add(tc_nagpur)
         db.flush()
 
-        # Training Options: Live verified batch vs catalogue
+        # Training Options: Demonstration batches with truthful DEMO_DATA labeling
         to_auto_live = TrainingOption(
             center_id=tc_nagpur.id,
             qualification_id=q_auto.id,
             batch_code="PM-AJAY-NAG-2026-B1",
             is_verified_live_batch=True,
-            truth_state="LIVE",
+            truth_state="DEMO_DATA",
             seat_capacity=30,
             seats_available=14,
             start_date=datetime.utcnow() + timedelta(days=12),
@@ -317,7 +344,7 @@ def seed_database():
             qualification_id=q_tailor.id,
             batch_code="PM-AJAY-NAG-2026-T1",
             is_verified_live_batch=True,
-            truth_state="LIVE",
+            truth_state="DEMO_DATA",
             seat_capacity=25,
             seats_available=8,
             start_date=datetime.utcnow() + timedelta(days=15),
@@ -455,6 +482,73 @@ def seed_database():
             language="mr"
         )
         db.add(consent1)
+        db.flush()
+
+        print("Seeding Authenticated Roles with Secure Password Hashes...")
+        u_admin = User(
+            email="admin@nagpur.gov.in",
+            phone="9000000001",
+            full_name="Nagpur District Skill Committee Admin",
+            role="district_admin",
+            hashed_password=hash_password("admin123"),
+            is_active=True
+        )
+        u_worker = User(
+            email="worker@nagpur.gov.in",
+            phone="9000000002",
+            full_name="Sunita Patil (Field Mobilizer)",
+            role="field_worker",
+            hashed_password=hash_password("worker123"),
+            is_active=True
+        )
+        u_counsellor = User(
+            email="counsellor@nagpur.gov.in",
+            phone="9000000003",
+            full_name="Dr. Aniket Deshmukh (Livelihood Counsellor)",
+            role="counsellor",
+            hashed_password=hash_password("counsel123"),
+            is_active=True
+        )
+        u_finance = User(
+            email="finance@nagpur.gov.in",
+            phone="9000000004",
+            full_name="Pooja Sharma (Lead Bank Financial Counsellor)",
+            role="financial_counsellor",
+            hashed_password=hash_password("finance123"),
+            is_active=True
+        )
+        u_provider = User(
+            email="provider@pmkk.gov.in",
+            phone="9000000005",
+            full_name="Vidarbha Skills Center Coordinator",
+            role="provider",
+            hashed_password=hash_password("provider123"),
+            is_active=True
+        )
+        u_employer = User(
+            email="employer@mahavitaran.com",
+            phone="9000000006",
+            full_name="Bajaj & Mahindra Auto HR Representative",
+            role="employer",
+            hashed_password=hash_password("employer123"),
+            is_active=True
+        )
+        u_ramesh = User(
+            id=b1.id,
+            email="ramesh@beneficiary.lip",
+            phone="9876543210",
+            full_name="Ramesh Mesram",
+            role="beneficiary",
+            hashed_password=hash_password("ramesh123"),
+            is_active=True
+        )
+        db.add_all([u_admin, u_worker, u_counsellor, u_finance, u_provider, u_employer, u_ramesh])
+        db.flush()
+
+        m_admin = Membership(user_id=u_admin.id, organization_id=org_district.id, role="admin", jurisdiction_scope="district")
+        m_provider = Membership(user_id=u_provider.id, organization_id=org_provider.id, role="admin", jurisdiction_scope="district")
+        m_employer = Membership(user_id=u_employer.id, organization_id=org_employer.id, role="staff", jurisdiction_scope="district")
+        db.add_all([m_admin, m_provider, m_employer])
 
         db.commit()
         print("Database seeding completed successfully!")

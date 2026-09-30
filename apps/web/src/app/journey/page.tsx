@@ -1,14 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { TruthBadge } from "@/components/TruthBadge";
-import { CheckCircle2, Clock, MapPin, Building2, AlertCircle, ArrowUpRight, PhoneCall } from "lucide-react";
+import { getJourneyHome, updateActionStatus } from "@/lib/api";
+import { CheckCircle2, Clock, MapPin, Building2, AlertCircle, ArrowUpRight, PhoneCall, RefreshCw } from "lucide-react";
 
 export default function JourneyPage() {
-  const [actions, setActions] = useState([
+  const [loading, setLoading] = useState(true);
+  const [pathwayTitle, setPathwayTitle] = useState("Automotive Two Wheeler Service Technician (NSQF L4)");
+  const [truthState, setTruthState] = useState<"LIVE" | "DEMO_DATA">("LIVE");
+  const [actions, setActions] = useState<any[]>([
     {
       id: "act-1",
       title: "आवश्यक कागदपत्रे गोळा करा (Prepare Documents)",
@@ -39,8 +43,57 @@ export default function JourneyPage() {
     }
   ]);
 
-  const toggleAction = (id: string) => {
-    setActions(actions.map(a => a.id === id ? { ...a, completed: !a.completed } : a));
+  useEffect(() => {
+    const fetchJourney = async () => {
+      setLoading(true);
+      try {
+        const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
+        const idToFetch = storedId || "demo-beneficiary-id";
+        const data = await getJourneyHome(idToFetch);
+
+        if (data) {
+          if (data.active_pathway?.title) {
+            setPathwayTitle(data.active_pathway.title);
+          }
+          if (data.action_plan && data.action_plan.length > 0) {
+            const mappedActions = data.action_plan.map((a: any) => ({
+              id: a.id,
+              title: a.title,
+              desc: a.description || "",
+              completed: a.status === "completed",
+              due: a.due_date || "Within 14 days"
+            }));
+            setActions(mappedActions);
+          }
+          if (idToFetch.includes("demo")) {
+            setTruthState("DEMO_DATA");
+          } else {
+            setTruthState("LIVE");
+          }
+        }
+      } catch (err) {
+        console.warn("Using offline/resilient journey defaults:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchJourney();
+  }, []);
+
+  const toggleAction = async (id: string) => {
+    const target = actions.find(a => a.id === id);
+    if (!target) return;
+    const newCompleted = !target.completed;
+    const newStatus = newCompleted ? "completed" : "pending";
+
+    // Optimistic UI update
+    setActions(actions.map(a => a.id === id ? { ...a, completed: newCompleted } : a));
+
+    try {
+      await updateActionStatus(id, newStatus);
+    } catch (err) {
+      console.warn("Action update queued offline or recorded locally:", err);
+    }
   };
 
   const nextStep = actions.find(a => !a.completed);
@@ -58,13 +111,13 @@ export default function JourneyPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Step 4 of 5 • My Journey (माझा प्रवास)
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state={truthState} />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
               उपजीविका प्रगती व पुढील पायरी
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              निवडलेला मार्ग: Automotive Two Wheeler Service Technician (NSQF L4)
+              निवडलेला मार्ग: {pathwayTitle}
             </p>
           </div>
 

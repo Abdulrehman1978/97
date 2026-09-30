@@ -169,7 +169,7 @@ def list_matching_candidates(skill_keyword: Optional[str] = None, district_code:
         
         candidates.append({
             "candidate_id": f"CAN-{b.id[:8]}", # Pseudonymous identifier for privacy
-            "first_name_initial": b.full_name.split()[0] if b.full_name else "Candidate",
+            "first_name_initial": f"{b.full_name.strip()[0].upper()}." if (b.full_name and b.full_name.strip()) else "C.",
             "education": edu,
             "verified_skills": skill_names,
             "employment_preference": pref,

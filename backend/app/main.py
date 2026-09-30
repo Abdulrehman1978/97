@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.config import settings
@@ -14,16 +15,23 @@ from backend.app.journey.router import router as journey_router
 from backend.app.integrations.router import router as integrations_router
 from backend.app.admin.router import router as admin_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ensure tables and reference seed data exist on launch."""
+    seed_database()
+    yield
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Production-Grade AI-Driven Voice Operating System for PM-AJAY GIA Livelihood Skilling."
+    description="Production-Grade AI-Driven Voice Operating System for PM-AJAY GIA Livelihood Skilling.",
+    lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware: Strict origin allowlist without wildcard
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS + ["*"], # Permissive in dev/demo
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,10 +47,6 @@ app.include_router(journey_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 
-@app.on_event("startup")
-def startup_event():
-    """Ensure tables and reference seed data exist on launch."""
-    seed_database()
 
 @app.get("/health/live")
 def health_live():

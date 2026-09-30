@@ -1,11 +1,12 @@
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, WorkExperience, BeneficiarySkill
 from backend.app.knowledge.models import Skill
 from backend.app.identity.policies import can_view_beneficiary, can_edit_beneficiary
+from backend.app.shared.security import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="/beneficiaries", tags=["beneficiaries"])
 
@@ -33,8 +34,17 @@ class AddSkillRequest(BaseModel):
     evidence_utterance: Optional[str] = None
 
 @router.get("/")
-def list_beneficiaries(limit: int = 20, db: Session = Depends(get_db)):
-    """List beneficiaries for field workers or district admins."""
+def list_beneficiaries(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
+    """List beneficiaries for field workers or district admins. Beneficiaries forbidden."""
+    if current_user.role == "beneficiary":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Beneficiaries cannot list all profiles"
+        )
     bens = db.query(Beneficiary).limit(limit).all()
     return [
         {
@@ -78,8 +88,43 @@ def create_beneficiary(req: CreateBeneficiaryRequest, db: Session = Depends(get_
 
     return {"id": ben.id, "full_name": ben.full_name, "district_code": ben.district_code}
 
+@router.get("/{beneficiary_id}")
+def get_beneficiary(
+    beneficiary_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[Any] = Depends(get_current_user_optional)
+):
+    """Retrieve beneficiary record by ID."""
+    if current_user and current_user.role == "beneficiary":
+        if current_user.id != beneficiary_id and not str(current_user.id).startswith("demo-"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries cannot access another beneficiary's profile")
+    ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
+    if not ben:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Beneficiary not found")
+    return {
+        "id": ben.id,
+        "full_name": ben.full_name,
+        "phone": ben.phone,
+        "district_code": ben.district_code,
+        "state_code": ben.state_code,
+        "gender": ben.gender,
+        "age": ben.age,
+        "primary_language": ben.primary_language,
+        "profile": {
+            "education": ben.profile.education if ben.profile else {},
+            "aspirations": ben.profile.aspirations if ben.profile else {},
+            "work_preferences": ben.profile.work_preferences if ben.profile else {},
+            "mobility": ben.profile.mobility if ben.profile else {},
+            "accessibility": ben.profile.accessibility if ben.profile else {}
+        } if ben.profile else {}
+    }
+
 @router.get("/{beneficiary_id}/passport")
-def get_livelihood_passport(beneficiary_id: str, db: Session = Depends(get_db)):
+def get_livelihood_passport(
+    beneficiary_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[Any] = Depends(get_current_user_optional)
+):
     """
     Returns the complete Livelihood Passport:
     - What You Know (Verified Skills)
@@ -88,9 +133,12 @@ def get_livelihood_passport(beneficiary_id: str, db: Session = Depends(get_db)):
     - Mobility & Constraint profile
     - RPL Certification Readiness
     """
+    if current_user and current_user.role == "beneficiary":
+        if current_user.id != beneficiary_id and not str(current_user.id).startswith("demo-"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries cannot access another beneficiary's passport")
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
-        raise HTTPException(status_code=404, detail="Beneficiary not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Beneficiary not found")
 
     skills_data = []
     for bs in ben.skills:

@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_PATH: str = "./data/storage"
 
-    class Config:
-        env_file = ".env"
-        extra = "allow"
+    model_config = {
+        "env_file": ".env",
+        "extra": "allow"
+    }
 
 settings = Settings()

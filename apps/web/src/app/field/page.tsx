@@ -1,19 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
-import { UserCheck, ShieldAlert, CheckCircle2, ArrowRight, Phone, MapPin, AlertCircle } from "lucide-react";
+import { getCases, counsellorOverride } from "@/lib/api";
+import { UserCheck, ShieldAlert, CheckCircle2, ArrowRight, Phone, MapPin, AlertCircle, RefreshCw } from "lucide-react";
 
 export default function FieldWorkerPage() {
+  const [loading, setLoading] = useState(true);
+  const [cases, setCases] = useState<any[]>([]);
   const [overrideSubmitted, setOverrideSubmitted] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
   const [selectedCase, setSelectedCase] = useState("CASE-2026-NAG-01");
+  const [currentRec, setCurrentRec] = useState("Automotive Two Wheeler Service Technician (Wage)");
   const [newPathway, setNewPathway] = useState("Self Employed Motorcycle Workshop Owner");
   const [overrideReason, setOverrideReason] = useState(
     "Candidate already owns ancestral plot and basic compressor in village; enterprise model has higher family survival than distant wage employment."
   );
 
-  const cases = [
+  const defaultCases = [
     {
       id: "CASE-2026-NAG-01",
       name: "Ramesh Mesram",
@@ -34,13 +39,48 @@ export default function FieldWorkerPage() {
     }
   ];
 
-  const handleOverride = (e: React.FormEvent) => {
+  const fetchCases = async () => {
+    setLoading(true);
+    try {
+      const data = await getCases("MH-NAG");
+      if (data && data.length > 0) {
+        setCases(data);
+        setSelectedCase(data[0].id);
+        setCurrentRec(data[0].current_rec || "Automotive Service Technician (Wage)");
+      } else {
+        setCases(defaultCases);
+      }
+    } catch (e) {
+      console.warn("Using default field caseload:", e);
+      setCases(defaultCases);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCases();
+  }, []);
+
+  const handleOverride = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!overrideReason.trim()) {
       alert("Mandatory reason must be entered for counsellor override.");
       return;
     }
-    setOverrideSubmitted(true);
+    setOverrideError(null);
+    try {
+      await counsellorOverride(
+        selectedCase,
+        "counsellor-nagpur-01",
+        currentRec,
+        newPathway,
+        overrideReason
+      );
+      setOverrideSubmitted(true);
+    } catch (err: any) {
+      setOverrideError(err.message || "Failed to persist override to audit log.");
+    }
   };
 
   return (

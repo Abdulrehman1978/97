@@ -6,8 +6,9 @@
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)](https://python.org)
 [![TailwindCSS v4](https://img.shields.io/badge/Tailwind-v4.0-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./THIRD_PARTY_NOTICES.md)
-[![Tests: 15 Passed](https://img.shields.io/badge/Pytest-15%20Passed-brightgreen)](./backend/tests)
-[![GIGW 3.0 / WCAG 2.1 AA](https://img.shields.io/badge/Compliance-GIGW%203.0%20%7C%20WCAG%20AA-success)](./docs/compliance)
+[![Tests: 46 Passed](https://img.shields.io/badge/Pytest-46%20Passed-brightgreen)](./backend/tests)
+[![GIGW 3.0 / WCAG 2.2 AA](https://img.shields.io/badge/Compliance-GIGW%203.0%20%7C%20WCAG%202.2%20AA-success)](./docs/compliance)
+[![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-blue?logo=docker&logoColor=white)](./docs/deployment/LOCAL_AND_DOCKER_RUNBOOK.md)
 
 ---
 
@@ -52,96 +53,105 @@ LIP is **not a conversational chatbot** that outputs static web links. It is a *
                     │                                │
                     ▼                                ▼
        SQLite / PostgreSQL Database         DB-Backed Job Queue
-    (38 Tables • Strictly ≤ 45 budget)       (One Async Worker)
+    (39 Tables • Strictly ≤ 45 budget)       (One Async Worker)
                     │
                     ▼
      Provider Adapters (Speech STT/TTS • Telephone IVR • WhatsApp)
 ```
 
 - **Modular Monolith:** 8 cleanly decoupled domains in a single FastAPI application.
-- **Relational Budget:** 38 normalized tables (under the 45-table architectural ceiling).
+- **Relational Budget:** 39 normalized tables (under the 45-table architectural ceiling).
 - **Zero Unearned Complexity:** No Redis, no Kafka, no dedicated vector DBs. PostgreSQL full-text search and trigram indexing satisfy all semantic and lexical retrieval needs.
 - **Low-Tech Access:** Integrated telephone IVR (`1800-LIP-AJAY`) with DTMF/voice turns, missed-call callback scheduling, and offline-first PWA caching (`sw.js`).
+- **Strict Role-Based Authorization & Privacy:** Server-side policy gate protects sensitive data and strictly conceals caste identity from employers.
 
 ---
 
-## 4. Key Surfaces & Routes
+## 4. Truth States Contract
 
-| User Surface | Path | Key Capability |
+To uphold absolute transparency with beneficiaries, district officers, and SIH jury members, every data point and service is tagged with its genuine truth state:
+
+| Truth State | Description | Examples in Platform |
 |---|---|---|
-| **Public Transparency Portal** | `/` | 3 USPs, PM-AJAY GIA mission, ecosystem directory, DPDP privacy principles. |
-| **Talk (Voice Intake)** | `/interview` | Spoken trade story intake, real-time waveform, instant extraction preview. |
-| **My Skills (Passport)** | `/passport` | Verified Skill Graph, trade tools, and RPL readiness percentage. |
-| **My Paths (Recommendations)** | `/pathways` | **Living Pathway** node graph, factor breakdown, counterfactual travel slider. |
-| **My Journey (Closed Loop)** | `/journey` | Dominant next action, document checklist, milestone tracking. |
-| **Assistance & Grievances** | `/help` | Offline sync monitor, missed-call callback, grievance registration. |
-| **Field Worker Caseload** | `/field` | Offline caseload, assisted village interviews, audited overrides. |
-| **Financial Counsellor** | `/counsellor/finance` | Enterprise capital estimation, NSFDC/MUDRA pre-screening, literacy checklist. |
-| **Training Provider Desk** | `/provider` | Empanelled center accessibility, batch capacity, live seat management. |
-| **Employer Portal** | `/employer` | Job/apprenticeship requisitions, candidate matching with **caste strictly hidden**. |
-| **District Admin Planning** | `/admin` | Supply-demand gap matrix, proposed batch simulator, project builder. |
-| **Inter-Agency Coordination** | `/coordination` | Cross-department referral tracking, SLA countdowns, blocker escalation. |
-| **⚡ SIH Judge Demo Desk** | `/demo` | Live microphone, judge-controlled radius variation, IVR simulator, proof matrix. |
+| `LIVE` | Feature genuinely works end-to-end with real persistence and verified domain logic. | Spoken extraction, deterministic constraint engine, ranking, RPL evaluation, counterfactual recalculation, journey checklist, RBAC. |
+| `SANDBOX` | Fully functional local simulation / sandbox adapter for external protocols. | Interactive telephone IVR (`1800-LIP-AJAY` simulator), WhatsApp webhook sandbox, SMS callback simulator. |
+| `ADAPTER_READY` | Complete API adapter and schema implemented, pending government production credentials. | Skill India Digital Hub (SIDH), National Career Service (NCS), DigiLocker. |
+| `DEMO_DATA` | Transparently labelled synthetic seed data for demonstration scenarios. | Ramesh Mesram baseline profile, Nagpur batch `PM-AJAY-NAG-2026-B1`, synthetic employer jobs, district demand aggregates. |
 
 ---
 
-## 5. Quick Start (Run Locally in 2 Minutes)
+## 5. Key Surfaces & Routes
 
-### Prerequisites
-- Python 3.11+ (Tested on Python 3.14)
-- Node.js 18+ (Tested on Node.js 22)
-- Git
+| User Surface | Path | Key Capability | Truth State |
+|---|---|---|---|
+| **Public Transparency Portal** | `/` | 3 USPs, PM-AJAY GIA mission, ecosystem directory, DPDP privacy principles. | `LIVE` |
+| **Talk (Voice Intake)** | `/interview` | Spoken trade story intake, real-time waveform, instant extraction preview. | `LIVE` |
+| **My Skills (Passport)** | `/passport` | Verified Skill Graph, trade tools, and RPL readiness percentage. | `LIVE` |
+| **My Paths (Recommendations)** | `/pathways` | **Living Pathway** node graph, factor breakdown, counterfactual travel slider. | `LIVE` |
+| **My Journey (Closed Loop)** | `/journey` | Dominant next action, document checklist, milestone tracking. | `LIVE` |
+| **Assistance & Grievances** | `/help` | Offline sync monitor, missed-call callback, grievance registration. | `LIVE` / `SANDBOX` |
+| **Field Worker Caseload** | `/field` | Offline caseload, assisted village interviews, audited overrides. | `LIVE` |
+| **Financial Counsellor** | `/counsellor/finance` | Enterprise capital estimation, NSFDC/MUDRA pre-screening, literacy checklist. | `LIVE` |
+| **Training Provider Desk** | `/provider` | Empanelled center accessibility, batch capacity, live seat management. | `LIVE` |
+| **Employer Portal** | `/employer` | Job/apprenticeship requisitions, candidate matching with **caste strictly hidden**. | `LIVE` |
+| **District Admin Planning** | `/admin` | Supply-demand gap matrix, proposed batch simulator, project builder. | `LIVE` |
+| **Inter-Agency Coordination** | `/coordination` | Cross-department referral tracking, SLA countdowns, blocker escalation. | `LIVE` |
+| **⚡ SIH Judge Demo Desk** | `/demo` | Live microphone, judge-controlled radius variation, IVR simulator, proof matrix. | `LIVE` |
 
-### 1. Clone Repository
+---
+
+## 6. Quick Start & Deployment
+
+### Option A: Docker Compose (Recommended)
+From a fresh clone:
 ```bash
 git clone https://github.com/Abdulrehman1978/97.git
 cd 97
+docker compose up --build
 ```
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- Swagger Docs: `http://localhost:8000/docs`
+- PostgreSQL 16: `localhost:5432` (healthy)
 
-### 2. Backend Setup & Seed
+### Option B: Local Bare-Metal (Python + Node.js)
 ```bash
-# Set up virtual environment
+# 1. Backend Setup
 python -m venv .venv
-
-# Activate environment (Windows PowerShell)
 .\.venv\Scripts\Activate.ps1
-# (Linux/macOS: source .venv/bin/activate)
-
-# Install Python dependencies
 pip install -r backend/requirements.txt
-
-# Run database seed (creates 38 tables with real NCO & NQR codes)
 python -m backend.app.seed
-
-# Start FastAPI server
 uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-*API running at: `http://localhost:8000` | Swagger UI: `http://localhost:8000/docs`*
 
-### 3. Frontend Setup
-```bash
-# In a new terminal:
+# 2. Frontend Setup (New Terminal)
 cd apps/web
 npm install
 npm run dev
 ```
-*Web Platform running at: `http://localhost:3000` | Judge Console: `http://localhost:3000/demo`*
+
+See [Local & Docker Runbook](./docs/deployment/LOCAL_AND_DOCKER_RUNBOOK.md) for complete details.
 
 ---
 
-## 6. Automated Verification & Tests
+## 7. Automated Verification & Tests
 
-### Backend Unit & Integration Tests (15 Passed)
+### Backend Unit & Integration Tests (46 Passed)
 ```bash
 .\.venv\Scripts\pytest -v
 ```
-- `test_health.py`: Liveness, readiness, DB connection.
-- `test_extraction.py`: Spoken trade task & tool extraction from Hindi/Marathi utterances.
-- `test_constraints_and_ranking.py`: Strict exclusion of expired qualifications, feasibility filtering, multi-factor ranking.
-- `test_rpl_and_counterfactuals.py`: RPL gap identification, what-if travel radius slider.
-- `test_policy_rag.py`: Grounded citations, safe abstention on out-of-domain queries.
-- `test_ivr_telephony.py`: DTMF turns, missed-call callback scheduling.
-- `test_opportunities_and_privacy.py`: Training options, candidate matching with strict caste privacy isolation, application status tracking.
+All **46 automated tests pass in ~4.3 seconds**:
+- `test_health.py` (3 tests): Liveness, readiness, DB connection.
+- `test_extraction.py` (2 tests): Spoken trade task & tool extraction from Hindi/Marathi utterances.
+- `test_constraints_and_ranking.py` (3 tests): Strict exclusion of expired qualifications, feasibility filtering, multi-factor ranking.
+- `test_rpl_and_counterfactuals.py` (2 tests): RPL gap identification, what-if travel radius slider.
+- `test_policy_rag.py` (2 tests): Grounded citations, safe abstention on out-of-domain queries.
+- `test_ivr_telephony.py` (2 tests): DTMF turns, missed-call callback scheduling.
+- `test_opportunities_and_privacy.py` (3 tests): Training options, candidate matching with strict caste privacy isolation, application status tracking.
+- `test_auth_and_permissions.py` (8 tests): Password hashing, real login authentication, token verification, RBAC endpoint protection.
+- `test_journey_and_workflows.py` (5 tests): Beneficiary journey persistence, action status updates, grievance registration with real IDs.
+- `test_admin_and_planning.py` (5 tests): Aggregated district demand calculation, batch planning proposal generation, inter-agency SLA tracking.
+- `test_security_and_privacy.py` (6 tests): SQL injection prevention, employer caste redaction, secure headers, CORS origin enforcement.
+- `test_database_and_migrations.py` (5 tests): Table budget verification (39 tables ≤ 45), Alembic configuration check, foreign key constraints.
 
 ### Frontend Production Build
 ```bash
@@ -152,20 +162,38 @@ npm run build
 
 ---
 
-## 7. Governance, Privacy & Compliance
+## 8. Governance, Privacy & Compliance
 
 - **DPDP-2023 Readiness:** Strict purpose limitation, ephemeral raw audio deletion after transcription, and server-side policy gate `can_access_sensitive_field()` that strictly excludes caste from employer matching.
 - **Zero Hallucinated Approvals:** Scheme matches are transparent non-binding pre-screenings; statutory approvals remain with authorized officials.
-- **GIGW 3.0 & WCAG 2.1 AA:** Accessible contrast, 48px touch targets, screen-reader compatibility, keyboard navigation, and audio read-aloud buttons.
+- **GIGW 3.0 & WCAG 2.2 AA:** Accessible contrast, 48px touch targets, screen-reader compatibility, keyboard navigation, and audio read-aloud buttons.
 
 ---
 
-## 8. Documentation Index
+## 9. Documentation Index
 
+### Architecture & Specification
 - [Master Product Specification V3](./docs/MASTER_PRODUCT_SPEC_V3.md)
-- [Implementation Progress Tracker](./docs/PROGRESS_TRACKER.md)
-- [SIH26097 Problem Statement Traceability Matrix](./docs/traceability/SIH26097_REQUIREMENTS_MATRIX.md)
-- [3-Minute Hero Demonstration Script](./docs/demo/DEMO_SCRIPT_3_MIN.md)
-- [Jury Technical FAQ & Evidence](./docs/demo/JUDGE_FAQ.md)
 - [Architecture Decision Records (ADRs)](./docs/architecture)
 - [Third-Party Notices & Licenses](./THIRD_PARTY_NOTICES.md)
+
+### Verification & Evidence
+- [Packet 28 Integrity Audit](./docs/work/28-integrity-audit.md)
+- [Packet 28 Results & Hardening Report](./docs/work/28-result.md)
+- [Build Verification Evidence](./docs/evidence/BUILD_VERIFICATION.md)
+- [Final Acceptance Matrix](./docs/evidence/FINAL_ACCEPTANCE_MATRIX.md)
+- [Implementation Progress Tracker](./docs/PROGRESS_TRACKER.md)
+- [SIH26097 Requirements Traceability Matrix](./docs/traceability/SIH26097_REQUIREMENTS_MATRIX.md)
+
+### Compliance & Security
+- [Accessibility Evidence (WCAG 2.2 AA / GIGW 3.0)](./docs/compliance/ACCESSIBILITY_EVIDENCE.md)
+- [Security Architecture & Penetration Testing Evidence](./docs/compliance/SECURITY_EVIDENCE.md)
+- [Privacy Data Flow & DPDP Act 2023 Compliance](./docs/compliance/PRIVACY_DATA_FLOW.md)
+
+### Deployment & Operations
+- [Local & Docker Runbook](./docs/deployment/LOCAL_AND_DOCKER_RUNBOOK.md)
+- [Production Readiness Checklist](./docs/deployment/PRODUCTION_READINESS.md)
+
+### Demonstration & Jury
+- [3-Minute Hero Demonstration Script](./docs/demo/DEMO_SCRIPT_3_MIN.md)
+- [Jury Technical FAQ & Evidence](./docs/demo/JUDGE_FAQ.md)

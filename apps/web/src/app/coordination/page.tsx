@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
-import { ArrowRightLeft, Clock, ShieldCheck, AlertCircle, CheckCircle2 } from "lucide-react";
+import { getCoordinationItems, updateCoordinationStatus } from "@/lib/api";
+import { ArrowRightLeft, Clock, ShieldCheck, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 
 export default function InterAgencyCoordinationPage() {
-  const [items, setItems] = useState([
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<any[]>([
     {
       id: "COORD-2026-001",
       beneficiary_name: "Ramesh Mesram",
@@ -28,6 +30,35 @@ export default function InterAgencyCoordinationPage() {
       blocker: "Revenue portal server response delay"
     }
   ]);
+
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const data = await getCoordinationItems();
+      if (data && data.length > 0) {
+        setItems(data);
+      }
+    } catch (err) {
+      console.warn("Using default coordination items:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const handleUpdateStatus = async (referralId: string, currentStatus: string) => {
+    const newStatus = currentStatus.toLowerCase().includes("progress") ? "completed" : "in_progress";
+    try {
+      await updateCoordinationStatus(referralId, newStatus);
+      fetchItems();
+    } catch (e) {
+      console.warn("Status update fallback:", e);
+      setItems(items.map(it => it.id === referralId ? { ...it, status: newStatus.replace("_", " ").toUpperCase() } : it));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
@@ -95,10 +126,10 @@ export default function InterAgencyCoordinationPage() {
                     </td>
                     <td className="p-3">
                       <button
-                        onClick={() => alert(`Coordination case ${item.id} acknowledged.`)}
+                        onClick={() => handleUpdateStatus(item.id, item.status)}
                         className="px-3 py-1 bg-sky-50 text-[#0f4c81] border border-sky-200 rounded-lg hover:bg-sky-100 font-bold"
                       >
-                        Acknowledge
+                        {item.status.toLowerCase().includes("progress") ? "पूर्ण करा (Complete)" : "प्रक्रियेत घ्या (Progress)"}
                       </button>
                     </td>
                   </tr>

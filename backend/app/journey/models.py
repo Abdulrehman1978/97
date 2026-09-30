@@ -107,6 +107,7 @@ class Case(Base):
     events = relationship("CaseEvent", back_populates="case", cascade="all, delete-orphan")
     referrals = relationship("Referral", back_populates="case", cascade="all, delete-orphan")
     followups = relationship("Followup", back_populates="case", cascade="all, delete-orphan")
+    beneficiary = relationship("Beneficiary")
 
 class CaseEvent(Base):
     __tablename__ = "case_events"

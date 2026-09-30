@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
-import { Briefcase, IndianRupee, ShieldCheck, CheckSquare, AlertTriangle, FileText } from "lucide-react";
+import { getEnterprisePlan } from "@/lib/api";
+import { Briefcase, IndianRupee, ShieldCheck, CheckSquare, AlertTriangle, FileText, RefreshCw } from "lucide-react";
 
 export default function FinancialCounsellorPage() {
-  const [activeTab, setActiveTab] = useState("readiness");
-
-  const enterpriseCase = {
+  const [loading, setLoading] = useState(true);
+  const [enterpriseCase, setEnterpriseCase] = useState<any>({
     beneficiary_name: "Ramesh Mesram",
     target_enterprise: "Two-Wheeler Service & Spare Parts Center",
     district: "Nagpur (MH)",
@@ -22,13 +22,13 @@ export default function FinancialCounsellorPage() {
       {
         scheme_name: "PM-AJAY Grants-in-Aid (GIA) Asset Subsidy",
         indicative_amount: "Up to ₹50,000 (100% Grant)",
-        status: "Potentially Eligible",
-        condition: "SC candidate with income <= 2.5L and verified NSQF L4 certificate."
+        status: "Potentially Relevant (Pre-screening)",
+        condition: "SC candidate with income <= 2.5L and verified NSQF L4 certificate. Sanction subject to DSC approval."
       },
       {
         scheme_name: "NSFDC Micro-Credit Scheme",
         indicative_amount: "Up to ₹50,000 at 5% Concessional Interest",
-        status: "Recommended for Balance Working Capital",
+        status: "Verification Required",
         condition: "Requires project feasibility endorsement by Financial Counsellor."
       },
       {
@@ -43,8 +43,28 @@ export default function FinancialCounsellorPage() {
       { task: "Setup UPI Merchant QR code (PhonePe/GPay for shop)", done: true },
       { task: "Weekly physical cashbook logging", done: false },
       { task: "Separate personal household expenses from shop account", done: false }
-    ]
-  };
+    ],
+    truth_state: "DEMO_DATA"
+  });
+
+  useEffect(() => {
+    const fetchPlan = async () => {
+      setLoading(true);
+      try {
+        const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
+        const idToFetch = storedId || "demo-beneficiary-id";
+        const data = await getEnterprisePlan(idToFetch);
+        if (data) {
+          setEnterpriseCase(data);
+        }
+      } catch (err) {
+        console.warn("Using default enterprise case:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPlan();
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
@@ -57,7 +77,7 @@ export default function FinancialCounsellorPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 GIA Mandate • Trained Financial Consultant Workspace
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state={enterpriseCase.truth_state || "DEMO_DATA"} />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
               वित्तीय व सूक्ष्म-उद्यम समुपदेशक डेस्क (Financial & Enterprise Counsellor)
@@ -119,7 +139,7 @@ export default function FinancialCounsellorPage() {
           </h2>
 
           <div className="space-y-3">
-            {enterpriseCase.scheme_prescreening.map((sc, i) => (
+            {enterpriseCase.scheme_prescreening?.map((sc: any, i: number) => (
               <div key={i} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <div className="flex items-center gap-2">
@@ -143,7 +163,7 @@ export default function FinancialCounsellorPage() {
           </h2>
 
           <div className="space-y-2 text-xs">
-            {enterpriseCase.literacy_checklist.map((item, idx) => (
+            {enterpriseCase.literacy_checklist?.map((item: any, idx: number) => (
               <div key={idx} className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <CheckSquare className={`w-4 h-4 ${item.done ? "text-emerald-600" : "text-slate-300"}`} />
                 <span className={item.done ? "text-slate-800 font-medium" : "text-slate-500"}>
