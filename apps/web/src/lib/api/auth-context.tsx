@@ -98,6 +98,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (me) {
         setUser(me);
         setStatus("authenticated");
+        if (me.role === "beneficiary") {
+          try {
+            const ben = await apiFetch<{ id: string }>("/api/v1/beneficiaries/me");
+            if (ben?.id && typeof window !== "undefined") {
+              localStorage.setItem("lip_beneficiary_id", ben.id);
+              localStorage.setItem("lip_beneficiary_id_state", "live");
+            }
+          } catch {
+            // New user without beneficiary record yet
+          }
+        }
       } else {
         clearStoredToken();
         throw new Error("Session could not be established after login");

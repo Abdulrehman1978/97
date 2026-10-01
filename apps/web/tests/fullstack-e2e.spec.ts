@@ -11,7 +11,6 @@ import { test, expect } from '@playwright/test';
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const RAMESH_BEN_ID = '7b921b01-1c32-4d64-9989-e173bc75f3ea';
 
 test.describe('True Full-Stack Integrated E2E Suite', () => {
 
@@ -161,11 +160,19 @@ test.describe('True Full-Stack Integrated E2E Suite', () => {
     await page.locator('button[type="submit"]').click();
     await page.waitForURL('**/interview', { timeout: 15000 });
 
+    const token = await page.evaluate(() => localStorage.getItem('lip_auth_token_v1'));
+    // Dynamically retrieve Ramesh's actual DB beneficiary ID via API using his auth token
+    const benMeRes = await fetch(`${API_BASE}/api/v1/beneficiaries/me`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const benMeData = await benMeRes.json();
+    const benId = benMeData.id;
+
     // Ensure localStorage has Ramesh's persisted beneficiary ID
-    await page.evaluate((benId) => {
-      localStorage.setItem('lip_beneficiary_id', benId);
+    await page.evaluate((id) => {
+      localStorage.setItem('lip_beneficiary_id', id);
       localStorage.setItem('lip_beneficiary_id_state', 'live');
-    }, RAMESH_BEN_ID);
+    }, benId);
 
     // Navigate to /help
     await page.goto('/help');
