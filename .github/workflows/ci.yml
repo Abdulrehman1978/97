@@ -59,6 +59,14 @@ jobs:
           alembic current
           alembic heads
 
+      - name: Seed Reference & Demo Data
+        env:
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
+          DEMO_MODE: "true"
+        run: |
+          python -m backend.scripts.seed_reference
+          python -m backend.scripts.seed_demo
+
       - name: Run Pytest Test Suite
         env:
           DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
