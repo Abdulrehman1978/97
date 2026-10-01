@@ -111,93 +111,99 @@ def seed_reference_data(db: Session):
         code="PM-AJAY-GIA",
         name="PM-AJAY Grants-in-Aid Component",
         ministry="Ministry of Social Justice and Empowerment",
-        description="Grants for socio-economic development, skill training, and asset generation for SC beneficiaries.",
-        funding_rules={
+        target_group="Scheduled Caste Beneficiaries",
+        benefits_summary="Grants for socio-economic development, skill training, and asset generation for SC beneficiaries.",
+        eligibility_rules={
             "stipend_per_day": 150,
             "max_tool_grant": 50000,
             "training_cost_coverage_pct": 100,
-            "target_retention_days": [30, 90, 180, 365]
-        },
-        eligibility_criteria={
+            "target_retention_days": [30, 90, 180, 365],
             "target_community": "SC",
             "max_annual_family_income_inr": 250000,
             "min_age": 18,
             "max_age": 45
-        }
+        },
+        indicative_subsidy_percentage=100.0,
+        max_subsidy_amount_inr=50000.0,
+        source_citation="PM-AJAY Scheme Operational Guidelines 2023-26"
     )
     prog_rpl = Program(
         code="NSQF-RPL-BRIDGE",
         name="Recognition of Prior Learning (RPL) & Bridge Certification",
         ministry="Ministry of Skill Development and Entrepreneurship",
-        description="Formal assessment and certification of prior informal work experience with 30-hour bridge courses.",
-        funding_rules={
+        target_group="Informal SC Artisans & Mechanics",
+        benefits_summary="Formal assessment and certification of prior informal work experience with 30-hour bridge courses.",
+        eligibility_rules={
             "assessment_fee_sponsored": True,
             "reward_money_candidate": 500,
-            "accidental_insurance_months": 36
-        },
-        eligibility_criteria={
+            "accidental_insurance_months": 36,
             "min_prior_experience_months": 12,
             "min_age": 18
-        }
+        },
+        indicative_subsidy_percentage=100.0,
+        max_subsidy_amount_inr=5000.0,
+        source_citation="MSDE PMKVY 4.0 RPL Guidelines"
     )
     prog_odop = Program(
         code="ODOP-MSME-GRANT",
         name="One District One Product Livelihood Grant Linkage",
         ministry="Ministry of Commerce & Industry",
-        description="Assistance for micro-enterprises operating in ODOP focus value chains.",
-        funding_rules={
+        target_group="SC Micro-Entrepreneurs in ODOP Clusters",
+        benefits_summary="Assistance for micro-enterprises operating in ODOP focus value chains.",
+        eligibility_rules={
             "capital_subsidy_pct": 35,
-            "max_loan_linkage_inr": 200000
-        },
-        eligibility_criteria={
+            "max_loan_linkage_inr": 200000,
             "sector_match_required": True
-        }
+        },
+        indicative_subsidy_percentage=35.0,
+        max_subsidy_amount_inr=200000.0,
+        source_citation="DPIIT ODOP Scheme Framework"
     )
     db.add_all([prog_gia, prog_rpl, prog_odop])
     db.flush()
 
     print("[SEED] Seeding Canonical Skills with Multilingual Aliases...")
-    sk_engine = Skill(canonical_name="Two-Wheeler Engine Overhaul", category="technical", industry_sector="Automotive", description="Disassembling, repairing, and tuning two-wheeler internal combustion engines.")
-    sk_brake = Skill(canonical_name="Brake System Maintenance", category="technical", industry_sector="Automotive", description="Inspecting, repairing drum and disc brakes, fluid replacement, shoe adjustment.")
-    sk_tools = Skill(canonical_name="Workshop Hand & Pneumatic Tools Operation", category="tool", industry_sector="Automotive", description="Proficiency with torque wrenches, spanners, pneumatic impact guns, and compressors.")
-    sk_sewing = Skill(canonical_name="Industrial Sewing Machine Operation", category="technical", industry_sector="Apparel", description="Operating single and multi-needle motorized sewing machines for garments.")
-    sk_pattern = Skill(canonical_name="Pattern Drafting & Fabric Cutting", category="technical", industry_sector="Apparel", description="Taking measurements, drafting paper patterns, and precision fabric shearing.")
-    sk_solar = Skill(canonical_name="Solar PV Panel Installation & Inverter Wiring", category="technical", industry_sector="Renewable Energy", description="Mounting solar modules, civil structure fixing, DC/AC inverter cabling and earthing.")
-    sk_digital = Skill(canonical_name="Digital Merchant UPI & Ledger Logging", category="digital", industry_sector="Cross-Sector", description="Using QR merchant apps, SMS payment verification, and basic digital transaction logging.")
+    sk_engine = Skill(canonical_name="Two-Wheeler Engine Overhaul", category="Mechanical", description="Disassembling, repairing, and tuning two-wheeler internal combustion engines.")
+    sk_brake = Skill(canonical_name="Brake System Maintenance", category="Mechanical", description="Inspecting, repairing drum and disc brakes, fluid replacement, shoe adjustment.")
+    sk_tools = Skill(canonical_name="Workshop Hand & Pneumatic Tools Operation", category="Mechanical", description="Proficiency with torque wrenches, spanners, pneumatic impact guns, and compressors.")
+    sk_sewing = Skill(canonical_name="Industrial Sewing Machine Operation", category="Textiles", description="Operating single and multi-needle motorized sewing machines for garments.", is_traditional_craft=True)
+    sk_pattern = Skill(canonical_name="Pattern Drafting & Fabric Cutting", category="Textiles", description="Taking measurements, drafting paper patterns, and precision fabric shearing.", is_traditional_craft=True)
+    sk_solar = Skill(canonical_name="Solar PV Panel Installation & Inverter Wiring", category="Electrical", description="Mounting solar modules, civil structure fixing, DC/AC inverter cabling and earthing.")
+    sk_digital = Skill(canonical_name="Digital Merchant UPI & Ledger Logging", category="Retail", description="Using QR merchant apps, SMS payment verification, and basic digital transaction logging.")
     db.add_all([sk_engine, sk_brake, sk_tools, sk_sewing, sk_pattern, sk_solar, sk_digital])
     db.flush()
 
     # Multilingual aliases
     aliases = [
         # Engine Overhaul
-        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन दुरुस्ती", language="mr", phonetic_token="engine durusti", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन खोलणे", language="mr", phonetic_token="engine kholne", confidence_boost=0.95),
-        SkillAlias(skill_id=sk_engine.id, alias_text="इंजन की मरम्मत", language="hi", phonetic_token="engine marammat", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_engine.id, alias_text="bike engine repair", language="en", phonetic_token="bike engine repair", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_engine.id, alias_text="piston valve setting", language="en", phonetic_token="piston valve setting", confidence_boost=0.9),
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन दुरुस्ती", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन खोलणे", language_code="mr", confidence=0.95),
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजन की मरम्मत", language_code="hi", confidence=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="bike engine repair", language_code="en", confidence=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="piston valve setting", language_code="en", confidence=0.9),
 
         # Brake System
-        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक काम", language="mr", phonetic_token="brake kaam", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक शू बदलणे", language="mr", phonetic_token="brake shoe badalne", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक बनाना", language="hi", phonetic_token="brake banana", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_brake.id, alias_text="brake pad replacement", language="en", phonetic_token="brake pad replacement", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक काम", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक शू बदलणे", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक बनाना", language_code="hi", confidence=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="brake pad replacement", language_code="en", confidence=1.0),
 
         # Tools
-        SkillAlias(skill_id=sk_tools.id, alias_text="पाने आणि रेंच", language="mr", phonetic_token="paane wrench", confidence_boost=0.95),
-        SkillAlias(skill_id=sk_tools.id, alias_text="हवेचा कॉम्प्रेसर", language="mr", phonetic_token="havecha compressor", confidence_boost=0.9),
-        SkillAlias(skill_id=sk_tools.id, alias_text="पाना रेंच चलाना", language="hi", phonetic_token="pana wrench chalana", confidence_boost=0.95),
+        SkillAlias(skill_id=sk_tools.id, alias_text="पाने आणि रेंच", language_code="mr", confidence=0.95),
+        SkillAlias(skill_id=sk_tools.id, alias_text="हवेचा कॉम्प्रेसर", language_code="mr", confidence=0.9),
+        SkillAlias(skill_id=sk_tools.id, alias_text="पाना रेंच चलाना", language_code="hi", confidence=0.95),
 
         # Tailoring
-        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई मशीन चालवणे", language="mr", phonetic_token="silai machine chalavne", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई काम", language="hi", phonetic_token="silai kaam", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_pattern.id, alias_text="कापड कटिंग", language="mr", phonetic_token="kapad cutting", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_pattern.id, alias_text="ब्लाउज कटिंग", language="mr", phonetic_token="blouse cutting", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई मशीन चालवणे", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई काम", language_code="hi", confidence=1.0),
+        SkillAlias(skill_id=sk_pattern.id, alias_text="कापड कटिंग", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_pattern.id, alias_text="ब्लाउज कटिंग", language_code="mr", confidence=1.0),
 
         # Solar & Digital
-        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर पॅनेल बसवणे", language="mr", phonetic_token="solar panel basavne", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर वायरिंग", language="hi", phonetic_token="solar wiring", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_digital.id, alias_text="फोन पे गुगल पे चालवणे", language="mr", phonetic_token="phonepe gpay", confidence_boost=1.0),
-        SkillAlias(skill_id=sk_digital.id, alias_text="डिजिटल पेमेंट लेना", language="hi", phonetic_token="digital payment", confidence_boost=1.0)
+        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर पॅनेल बसवणे", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर वायरिंग", language_code="hi", confidence=1.0),
+        SkillAlias(skill_id=sk_digital.id, alias_text="फोन पे गुगल पे चालवणे", language_code="mr", confidence=1.0),
+        SkillAlias(skill_id=sk_digital.id, alias_text="डिजिटल पेमेंट लेना", language_code="hi", confidence=1.0)
     ]
     db.add_all(aliases)
     db.flush()
@@ -206,26 +212,23 @@ def seed_reference_data(db: Session):
     occ_mechanic = Occupation(
         nco_code="7231.0100",
         title="Two-Wheeler Service Technician",
-        division="7 - Craft and Related Trades Workers",
-        sub_major_group="72 - Metal, Machinery and Related Trades",
+        sector="Automotive",
         description="Performs routine maintenance, fault diagnostics, engine overhaul, and brake servicing on motorcycles and scooters.",
-        min_education_level="Class 8 or equivalent experiential competence"
+        nco_division="72"
     )
     occ_tailor = Occupation(
         nco_code="7531.0100",
         title="Self Employed Tailor",
-        division="7 - Craft and Related Trades Workers",
-        sub_major_group="75 - Food Processing, Woodworking, Garment and Other Craft",
+        sector="Apparel",
         description="Designs, cuts, fits, and sews custom garments using motorized or pedal sewing machines.",
-        min_education_level="Basic literacy or experiential competence"
+        nco_division="75"
     )
     occ_solar = Occupation(
         nco_code="7421.0300",
         title="Solar PV Installation Helper",
-        division="7 - Craft and Related Trades Workers",
-        sub_major_group="74 - Electrical and Electronic Trades",
+        sector="Renewable Energy",
         description="Assists in mechanical assembly and electrical cabling of rooftop and ground-mounted solar panels.",
-        min_education_level="Class 10 or ITI"
+        nco_division="74"
     )
     db.add_all([occ_mechanic, occ_tailor, occ_solar])
     db.flush()
@@ -237,24 +240,24 @@ def seed_reference_data(db: Session):
         title="Two Wheeler Service Technician",
         awarding_body="Automotive Skills Development Council (ASDC)",
         nsqf_level=4,
-        valid_from=now - timedelta(days=730),
-        valid_until=now + timedelta(days=730),
+        validity_status="current",
+        effective_from=now - timedelta(days=730),
+        effective_to=now + timedelta(days=730),
         duration_hours=450,
-        is_active=True,
-        sector="Automotive",
-        entry_requirements="Class 10 completed OR Class 8 with 2 years relevant experience (RPL Eligible)"
+        min_education="class_8",
+        rpl_eligible=True
     )
     q_tailor = Qualification(
         qp_code="AMH/Q1947",
         title="Self Employed Tailor",
         awarding_body="Apparel, Made-Ups & Home Furnishing Sector Skill Council",
         nsqf_level=4,
-        valid_from=now - timedelta(days=600),
-        valid_until=now + timedelta(days=500),
+        validity_status="current",
+        effective_from=now - timedelta(days=600),
+        effective_to=now + timedelta(days=500),
         duration_hours=360,
-        is_active=True,
-        sector="Apparel",
-        entry_requirements="Basic literacy with informal experience (RPL Eligible)"
+        min_education="unlettered",
+        rpl_eligible=True
     )
     # Expired qualification to test exclusion logic
     q_expired = Qualification(
@@ -262,38 +265,38 @@ def seed_reference_data(db: Session):
         title="Two Wheeler Repair Assistant (Legacy Standard)",
         awarding_body="Automotive Skills Development Council (ASDC)",
         nsqf_level=3,
-        valid_from=now - timedelta(days=1500),
-        valid_until=now - timedelta(days=200),
+        validity_status="expired",
+        effective_from=now - timedelta(days=1500),
+        effective_to=now - timedelta(days=200),
         duration_hours=300,
-        is_active=False,
-        sector="Automotive",
-        entry_requirements="Archived standard - Replaced by ASC/Q1411"
+        min_education="class_8",
+        rpl_eligible=True
     )
     db.add_all([q_auto, q_tailor, q_expired])
     db.flush()
 
     # NOS Competencies
-    comp_engine = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1418", nos_title="Overhaul and repair two-wheeler engine assemblies", nsqf_level=4, credit_hours=90, is_mandatory=True)
-    comp_brake = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1419", nos_title="Service and overhaul two-wheeler brake systems", nsqf_level=4, credit_hours=60, is_mandatory=True)
-    comp_electrical = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1420", nos_title="Diagnose and service two-wheeler electrical units", nsqf_level=4, credit_hours=80, is_mandatory=True)
-    comp_soft = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N9901", nos_title="Organize work and maintain health, safety and clean workshop", nsqf_level=4, credit_hours=30, is_mandatory=True)
+    comp_engine = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1418", nos_title="Overhaul and repair two-wheeler engine assemblies", competency_type="core_technical")
+    comp_brake = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1419", nos_title="Service and overhaul two-wheeler brake systems", competency_type="core_technical")
+    comp_electrical = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1420", nos_title="Diagnose and service two-wheeler electrical units", competency_type="core_technical")
+    comp_soft = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N9901", nos_title="Organize work and maintain health, safety and clean workshop", competency_type="health_safety")
     db.add_all([comp_engine, comp_brake, comp_electrical, comp_soft])
 
     # Occupation-Skill Mappings
     db.add_all([
-        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_engine.id, is_core=True),
-        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_brake.id, is_core=True),
-        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_tools.id, is_core=True),
-        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_digital.id, is_core=False),
-        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_sewing.id, is_core=True),
-        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_pattern.id, is_core=True),
-        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_digital.id, is_core=False)
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_engine.id, importance="mandatory"),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_brake.id, importance="mandatory"),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_tools.id, importance="mandatory"),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_digital.id, importance="optional"),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_sewing.id, importance="mandatory"),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_pattern.id, importance="mandatory"),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_digital.id, importance="optional")
     ])
 
     # Occupation-Qualification Alignment
     db.add_all([
-        OccupationQualification(occupation_id=occ_mechanic.id, qualification_id=q_auto.id, alignment_type="primary_formal"),
-        OccupationQualification(occupation_id=occ_tailor.id, qualification_id=q_tailor.id, alignment_type="primary_formal")
+        OccupationQualification(occupation_id=occ_mechanic.id, qualification_id=q_auto.id, alignment_score=0.95),
+        OccupationQualification(occupation_id=occ_tailor.id, qualification_id=q_tailor.id, alignment_score=0.95)
     ])
 
     # Local economic signals
