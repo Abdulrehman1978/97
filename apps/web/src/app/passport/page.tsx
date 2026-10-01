@@ -6,8 +6,11 @@ import { Navbar } from "@/components/Navbar";
 import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { TruthBadge } from "@/components/TruthBadge";
-import { Wrench, ShieldCheck, CheckCircle2, ArrowRight, Award, QrCode, FileText, RefreshCw, AlertCircle } from "lucide-react";
+import { Wrench, ShieldCheck, CheckCircle2, ArrowRight, Award, QrCode, FileText, RefreshCw, AlertCircle, Loader2 } from "lucide-react";
 import { getLivelihoodPassport } from "@/lib/api";
+import { NetworkError } from "@/lib/api/errors";
+
+const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export default function PassportPage() {
   const [activeTab, setActiveTab] = useState<"skills" | "experience" | "rpl">("skills");
@@ -41,19 +44,43 @@ export default function PassportPage() {
     }
   });
 
+  const [isDemo, setIsDemo] = useState(false);
+
+  const DEMO_SEED = passportData; // keep reference to the initial seed
+
   const loadPassport = async () => {
     setLoading(true);
     setError(null);
+    setIsDemo(false);
     try {
       const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
-      const idToFetch = storedId || "demo-beneficiary-id";
-      const apiPassport = await getLivelihoodPassport(idToFetch);
-      
+      const idState = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id_state") : null;
+
+      // If we are in demo mode and the stored ID is explicitly demo, use seed data
+      if (IS_DEMO_MODE && (!storedId || storedId === "demo-beneficiary-id" || idState === "demo")) {
+        setIsDemo(true);
+        setLoading(false);
+        return;
+      }
+
+      // If no real ID exists in production, do not load demo Ramesh
+      if (!storedId || storedId === "demo-beneficiary-id") {
+        if (!IS_DEMO_MODE) {
+          setError("कोणतेही प्रोफाइल आढळले नाही. कृपया पहिले मुलाखत पूर्ण करा. (No profile found — complete interview first)");
+          setLoading(false);
+          return;
+        }
+        setIsDemo(true);
+        setLoading(false);
+        return;
+      }
+
+      const apiPassport = await getLivelihoodPassport(storedId);
       setPassportData({
-        beneficiary_name: apiPassport.full_name || "Ramesh Mesram",
+        beneficiary_name: apiPassport.full_name || DEMO_SEED.beneficiary_name,
         district: `${apiPassport.district_code || "MH-NAG"} (MH)`,
         primary_trade: "Two-Wheeler Maintenance & Service",
-        qr_code_token: apiPassport.qr_code_token || "LIP-MH-NAG-2026",
+        qr_code_token: apiPassport.qr_code_token || DEMO_SEED.qr_code_token,
         skills: apiPassport.skills && apiPassport.skills.length > 0
           ? apiPassport.skills.map((s: any) => ({
               name: s.canonical_name,
@@ -62,7 +89,7 @@ export default function PassportPage() {
               confidence: Math.round((s.confidence_score || 0.9) * 100),
               status: s.verification_status === "beneficiary_confirmed" ? "Verified" : "Pending"
             }))
-          : passportData.skills,
+          : DEMO_SEED.skills,
         experience: apiPassport.work_experiences && apiPassport.work_experiences.length > 0
           ? {
               title: apiPassport.work_experiences[0].title,
@@ -70,12 +97,21 @@ export default function PassportPage() {
               tasks: apiPassport.work_experiences[0].tasks || ["इंजिन उघडणे", "ब्रेक काम"],
               tools: apiPassport.work_experiences[0].tools || ["Spanners", "Wrench"]
             }
-          : passportData.experience,
-        rpl: passportData.rpl
+          : DEMO_SEED.experience,
+        rpl: DEMO_SEED.rpl
       });
     } catch (e: any) {
-      console.warn("Passport API fetch error, retaining structured seed baseline:", e);
-      // Retain seeded baseline for hero demo resilience
+      if (IS_DEMO_MODE) {
+        // Demo: explicitly fall back to seed
+        setIsDemo(true);
+      } else {
+        // Production: surface the real error
+        if (e instanceof NetworkError) {
+          setError("Backend unreachable. Your passport could not be loaded. Please check your connection.");
+        } else {
+          setError(e.message || "Passport load failed. Please try again.");
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -84,6 +120,41 @@ export default function PassportPage() {
   useEffect(() => {
     loadPassport();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#fbfaf7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Loader2 className="w-8 h-8 text-[#0f4c81] animate-spin" />
+          <p className="text-sm font-medium">पासपोर्ट लोड करत आहे… (Loading passport)</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#fbfaf7]">
+        <Navbar />
+        <BeneficiaryNav />
+        <main className="max-w-2xl mx-auto px-4 py-12">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center space-y-4">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
+            <h2 className="font-bold text-slate-900">Passport Unavailable</h2>
+            <p className="text-sm text-slate-700">{error}</p>
+            <div className="flex justify-center gap-3">
+              <button onClick={loadPassport} className="px-4 py-2 bg-[#0f4c81] text-white text-xs font-bold rounded-xl">
+                <RefreshCw className="w-3.5 h-3.5 inline mr-1" /> Retry
+              </button>
+              <Link href="/interview" className="px-4 py-2 border border-slate-300 text-xs font-bold rounded-xl text-slate-700 hover:bg-slate-50">
+                ← Back to Interview
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-24 md:pb-12">
@@ -98,7 +169,7 @@ export default function PassportPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Step 2 of 5 • My Skills (माझे कौशल्य)
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state={isDemo ? "DEMO_DATA" : "LIVE"} />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
               उपजीविका पासपोर्ट (Livelihood Passport)

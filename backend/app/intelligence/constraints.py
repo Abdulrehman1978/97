@@ -6,7 +6,7 @@ Rule: Deterministic code enforces hard constraints; no LLM can bypass them.
 """
 
 from typing import Tuple, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.app.knowledge.models import Qualification
 from backend.app.opportunities.models import TrainingCenter
 
@@ -31,17 +31,23 @@ def evaluate_hard_constraints(
     Evaluates hard feasibility.
     Returns: (is_feasible: bool, failure_reason: Optional[str])
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # 1. Hard Rule: Qualification Validity
     if qualification.validity_status.lower() in ["expired", "superseded"]:
         return False, f"Qualification {qualification.qp_code} is expired or superseded as per NQR records."
     
-    if qualification.effective_to and qualification.effective_to < now:
-        return False, f"Qualification {qualification.qp_code} expired on {qualification.effective_to.strftime('%Y-%m-%d')}."
+    eff_to = qualification.effective_to
+    if eff_to is not None and eff_to.tzinfo is None:
+        eff_to = eff_to.replace(tzinfo=timezone.utc)
+    if eff_to and eff_to < now:
+        return False, f"Qualification {qualification.qp_code} expired on {eff_to.strftime('%Y-%m-%d')}."
 
-    if qualification.effective_from and qualification.effective_from > now:
-        return False, f"Qualification {qualification.qp_code} is not yet effective (starts {qualification.effective_from.strftime('%Y-%m-%d')})."
+    eff_from = qualification.effective_from
+    if eff_from is not None and eff_from.tzinfo is None:
+        eff_from = eff_from.replace(tzinfo=timezone.utc)
+    if eff_from and eff_from > now:
+        return False, f"Qualification {qualification.qp_code} is not yet effective (starts {eff_from.strftime('%Y-%m-%d')})."
 
     # 2. Hard Rule: Minimum Educational Prerequisite
     candidate_edu = profile_data.get("education", {}).get("highest_level", "class_10").lower()

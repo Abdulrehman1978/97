@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from backend.app.journey.models import Pathway, PathwayAction, Case, CaseEvent, 
 from backend.app.beneficiary.models import Beneficiary
 from backend.app.opportunities.models import Application
 from backend.app.admin.models import AuditEvent
+from backend.app.identity.policies import is_beneficiary_owner
 from backend.app.shared.security import get_current_user, require_roles
 from backend.app.config import settings
 
@@ -54,9 +55,13 @@ def file_grievance(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    """Submit a beneficiary grievance with registered audit ID."""
+    """Submit a beneficiary grievance with registered audit ID and ownership check."""
+    ben = db.query(Beneficiary).filter(Beneficiary.id == req.beneficiary_id).first()
+    if not ben:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+
     if current_user.role == "beneficiary":
-        if current_user.id != req.beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+        if not is_beneficiary_owner(current_user, ben):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries can only file grievances for themselves")
     elif current_user.role in ["employer", "provider"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role to file beneficiary grievances")
@@ -120,8 +125,12 @@ def list_coordination_items(
         ben = None
         if c:
             ben = c.beneficiary or db.query(Beneficiary).filter(Beneficiary.id == c.beneficiary_id).first()
-        now = datetime.utcnow()
-        days_remaining = (r.sla_due_date - now).days if r.sla_due_date else 3
+        now = datetime.now(timezone.utc)
+        # sla_due_date stored as naive UTC in DB — coerce to aware before subtracting
+        sla = r.sla_due_date
+        if sla is not None and sla.tzinfo is None:
+            sla = sla.replace(tzinfo=timezone.utc)
+        days_remaining = (sla - now).days if sla else 3
         items.append({
             "id": r.id,
             "beneficiary_name": ben.full_name if ben else "Beneficiary",
@@ -243,12 +252,28 @@ def record_outcome(
         wage_band_inr=req.wage_band_inr,
         retention_90d_verified=req.retention_90d_verified,
         retention_180d_verified=req.retention_180d_verified,
-        verified_at=datetime.utcnow()
+        verified_at=datetime.now(timezone.utc)
     )
     db.add(outcome)
     db.commit()
     db.refresh(outcome)
     return {"status": "outcome_recorded", "outcome_id": outcome.id, "milestone": "30_day" if req.retention_90d_verified else "initial"}
+
+@router.get("/me")
+def get_my_journey(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
+    """Retrieve journey home for currently authenticated beneficiary."""
+    if current_user.role != "beneficiary":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: /journey/me is reserved for beneficiary accounts")
+    ben = db.query(Beneficiary).filter(Beneficiary.user_id == current_user.id).first()
+    if not ben and settings.DEMO_MODE:
+        if str(current_user.id).startswith("demo-"):
+            ben = db.query(Beneficiary).filter(Beneficiary.phone == "9876543210").first()
+    if not ben:
+        raise HTTPException(status_code=404, detail="No beneficiary profile linked to current user")
+    return get_beneficiary_journey_home(ben.id, db, current_user)
 
 @router.get("/{beneficiary_id}")
 def get_beneficiary_journey_home(
@@ -264,15 +289,15 @@ def get_beneficiary_journey_home(
     3. Action Plan checklist
     4. Application status
     """
-    if current_user.role in ["employer", "provider"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for journey home")
-    if current_user.role == "beneficiary":
-        if current_user.id != beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot view another beneficiary's journey")
-
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=404, detail="Beneficiary not found")
+
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for journey home")
+    if current_user.role == "beneficiary":
+        if not is_beneficiary_owner(current_user, ben):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot view another beneficiary's journey")
 
     pathway = db.query(Pathway).filter(Pathway.beneficiary_id == beneficiary_id, Pathway.status == "active").first()
     actions = []
@@ -339,10 +364,14 @@ def select_pathway(
     current_user: Any = Depends(get_current_user)
 ):
     """Beneficiary selects a pathway; auto-generates sequential actionable steps."""
+    ben = db.query(Beneficiary).filter(Beneficiary.id == req.beneficiary_id).first()
+    if not ben:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+
     if current_user.role in ["employer", "provider"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for pathway selection")
     if current_user.role == "beneficiary":
-        if current_user.id != req.beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+        if not is_beneficiary_owner(current_user, ben):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot select pathway for another beneficiary")
 
     # Deactivate existing active pathways
@@ -365,7 +394,7 @@ def select_pathway(
             title="Prepare Mandatory Scheme Documents",
             description="Collect Caste Certificate, BPL/Income Proof, and Aadhaar-linked Bank Passbook.",
             order_index=1,
-            due_date=datetime.utcnow() + timedelta(days=3)
+            due_date=datetime.now(timezone.utc) + timedelta(days=3)
         ),
         PathwayAction(
             pathway_id=pathway.id,
@@ -373,7 +402,7 @@ def select_pathway(
             title="Practical Skill Verification & RPL Pre-check",
             description="Complete a short hands-on task review with field counsellor or training center assessor.",
             order_index=2,
-            due_date=datetime.utcnow() + timedelta(days=7)
+            due_date=datetime.now(timezone.utc) + timedelta(days=7)
         ),
         PathwayAction(
             pathway_id=pathway.id,
@@ -381,7 +410,7 @@ def select_pathway(
             title="Confirm Free Skilling Batch or Micro-Enterprise Grant",
             description="Seat confirmation under PM-AJAY GIA subsidized quota with DSC Nagpur.",
             order_index=3,
-            due_date=datetime.utcnow() + timedelta(days=14)
+            due_date=datetime.now(timezone.utc) + timedelta(days=14)
         ),
         PathwayAction(
             pathway_id=pathway.id,
@@ -389,7 +418,7 @@ def select_pathway(
             title="Post-Skilling Apprenticeship / Workshop Linkage",
             description="Interview with verified employer network or loan subsidy linkage under NSFDC.",
             order_index=4,
-            due_date=datetime.utcnow() + timedelta(days=60)
+            due_date=datetime.now(timezone.utc) + timedelta(days=60)
         )
     ]
     db.add_all(actions)
@@ -404,21 +433,25 @@ def update_action_status(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    """Update action status with completion timestamp."""
+    """Update action status with completion timestamp and ownership guard."""
     act = db.query(PathwayAction).filter(PathwayAction.id == action_id).first()
     if not act:
         raise HTTPException(status_code=404, detail="Action not found")
 
     pathway = db.query(Pathway).filter(Pathway.id == act.pathway_id).first()
+    if not pathway:
+        raise HTTPException(status_code=404, detail="Pathway not found")
+
+    ben = db.query(Beneficiary).filter(Beneficiary.id == pathway.beneficiary_id).first()
     if current_user.role == "beneficiary":
-        if pathway and pathway.beneficiary_id != current_user.id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+        if not is_beneficiary_owner(current_user, ben):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot update actions for another beneficiary")
     elif current_user.role in ["employer", "provider"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for action updates")
 
     act.status = req.status
     if req.status == "completed":
-        act.completed_at = datetime.utcnow()
+        act.completed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "updated", "action_id": act.id, "new_status": act.status}
 

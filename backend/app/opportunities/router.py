@@ -1,5 +1,5 @@
 from typing import Optional, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from backend.app.opportunities.models import TrainingCenter, TrainingOption, Emp
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, BeneficiarySkill
 from backend.app.knowledge.models import Qualification, Skill
 from backend.app.identity.models import Membership, Organization
+from backend.app.identity.policies import is_beneficiary_owner
 from backend.app.shared.security import get_current_user, require_roles
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
@@ -107,7 +108,7 @@ def create_training_option(
                 detail="Forbidden: You are not authorized to manage batches for another provider's training center"
             )
 
-    start_dt = datetime.strptime(req.start_date, "%Y-%m-%d") if req.start_date else datetime.utcnow()
+    start_dt = datetime.strptime(req.start_date, "%Y-%m-%d") if req.start_date else datetime.now(timezone.utc)
     batch = TrainingOption(
         center_id=req.center_id,
         qualification_id=req.qualification_id,
@@ -233,7 +234,9 @@ def list_applications(
     q = db.query(Application)
 
     if current_user.role == "beneficiary" and not str(current_user.id).startswith("demo-"):
-        q = q.filter(Application.beneficiary_id == current_user.id)
+        ben = db.query(Beneficiary).filter(Beneficiary.user_id == current_user.id).first()
+        ben_id = ben.id if ben else current_user.id
+        q = q.filter(Application.beneficiary_id == ben_id)
     elif current_user.role == "employer" and not str(current_user.id).startswith("demo-"):
         employer_opp_ids = [
             o.id for o in db.query(EmployerOpportunity).join(
@@ -276,13 +279,45 @@ def update_application_status(
     db: Session = Depends(get_db),
     current_user: Any = Depends(require_roles("employer", "provider", "district_admin", "state_admin", "ministry_admin"))
 ):
-    """Update candidate hiring status: applied -> shortlisted -> interviewing -> offered -> joined."""
+    """Update candidate hiring status. Enforces strict employer/provider organization ownership."""
     app = db.query(Application).filter(Application.id == application_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    if current_user.role == "employer" and not str(current_user.id).startswith("demo-"):
+        if not app.opportunity_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Not an employer requisition")
+        opp = db.query(EmployerOpportunity).filter(EmployerOpportunity.id == app.opportunity_id).first()
+        if not opp:
+            raise HTTPException(status_code=404, detail="Opportunity not found")
+        membership = db.query(Membership).filter(
+            Membership.user_id == current_user.id,
+            Membership.organization_id == opp.organization_id
+        ).first()
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You cannot modify applications for another employer's requisition"
+            )
+
+    elif current_user.role == "provider" and not str(current_user.id).startswith("demo-"):
+        if not app.training_option_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Not a training batch application")
+        batch = db.query(TrainingOption).filter(TrainingOption.id == app.training_option_id).first()
+        if not batch or not batch.center:
+            raise HTTPException(status_code=404, detail="Batch or center not found")
+        membership = db.query(Membership).filter(
+            Membership.user_id == current_user.id,
+            Membership.organization_id == batch.center.organization_id
+        ).first()
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You cannot modify applications for another provider's training batch"
+            )
         
     app.status = req.status
-    app.status_updated_at = datetime.utcnow()
+    app.status_updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "success", "application_id": app.id, "new_status": app.status}
 
@@ -292,12 +327,14 @@ def submit_application(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    """Apply to a verified training batch, apprenticeship, or wage job."""
-    if current_user.role == "beneficiary" and current_user.id != req.beneficiary_id and not str(current_user.id).startswith("demo-"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Beneficiaries can only submit applications for themselves"
-        )
+    """Apply to a verified training batch, apprenticeship, or wage job with ownership verification."""
+    if current_user.role == "beneficiary" and not str(current_user.id).startswith("demo-"):
+        ben = db.query(Beneficiary).filter(Beneficiary.id == req.beneficiary_id).first()
+        if not is_beneficiary_owner(current_user, ben):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Beneficiaries can only submit applications for themselves"
+            )
 
     app = Application(
         beneficiary_id=req.beneficiary_id,
