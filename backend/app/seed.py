@@ -329,9 +329,22 @@ def seed_demo_data(db: Session):
         print("[SEED] DEMO_MODE=False. Production isolation: Skipping synthetic demo operational data.")
         return
 
-    if db.query(Beneficiary).filter(Beneficiary.phone == "9876543210").first():
+    # Ensure demo authenticated accounts exist before personas to link foreign keys.
+    # Must happen BEFORE the early-exit check so user_id FK repairs can run.
+    ensure_authenticated_users(db)
+
+    existing_ben = db.query(Beneficiary).filter(Beneficiary.phone == "9876543210").first()
+    if existing_ben:
+        # Repair user_id FK in case beneficiary was seeded before users (legacy broken seed)
+        if existing_ben.user_id is None:
+            u_ramesh = db.query(User).filter(User.phone == "9876543210").first()
+            if u_ramesh:
+                existing_ben.user_id = u_ramesh.id
+                db.commit()
+                print(f"[SEED] Repaired Ramesh Beneficiary.user_id -> {u_ramesh.id}")
         print("[SEED] Demo persona already exists. Skipping demo seed.")
         return
+    u_ramesh = db.query(User).filter(User.phone == "9876543210").first()
 
     print("[SEED] Seeding Demo Organizations and Centers...")
     org_provider = Organization(
@@ -420,6 +433,7 @@ def seed_demo_data(db: Session):
 
     print("[SEED] Seeding Golden Demo Beneficiary: Rural Informal Mechanic (Ramesh Mesram)...")
     b1 = Beneficiary(
+        user_id=u_ramesh.id if u_ramesh else None,
         full_name="Ramesh Mesram",
         phone="9876543210",
         state_code="MH",
@@ -515,18 +529,30 @@ def seed_demo_data(db: Session):
     db.add(consent1)
     db.flush()
 
-    ensure_authenticated_users(db)
-
-    # Fetch users and link memberships
+    # Fetch users and link authoritative memberships
     u_admin = db.query(User).filter(User.email == "admin@nagpur.gov.in").first()
+    u_worker = db.query(User).filter(User.email == "worker@nagpur.gov.in").first()
+    u_counsellor = db.query(User).filter(User.email == "counsellor@nagpur.gov.in").first()
+    u_finance = db.query(User).filter(User.email == "finance@nagpur.gov.in").first()
     u_provider = db.query(User).filter(User.email == "provider@pmkk.gov.in").first()
     u_employer = db.query(User).filter(User.email == "employer@mahavitaran.com").first()
 
-    if u_admin and u_provider and u_employer:
-        m_admin = Membership(user_id=u_admin.id, organization_id=org_district.id, role="admin", jurisdiction_scope="district")
-        m_provider = Membership(user_id=u_provider.id, organization_id=org_provider.id, role="admin", jurisdiction_scope="district")
-        m_employer = Membership(user_id=u_employer.id, organization_id=org_employer.id, role="staff", jurisdiction_scope="district")
-        db.add_all([m_admin, m_provider, m_employer])
+    memberships_to_add = []
+    if u_admin and not db.query(Membership).filter(Membership.user_id == u_admin.id, Membership.organization_id == org_district.id).first():
+        memberships_to_add.append(Membership(user_id=u_admin.id, organization_id=org_district.id, role="admin", jurisdiction_scope="district"))
+    if u_worker and not db.query(Membership).filter(Membership.user_id == u_worker.id, Membership.organization_id == org_district.id).first():
+        memberships_to_add.append(Membership(user_id=u_worker.id, organization_id=org_district.id, role="staff", jurisdiction_scope="district"))
+    if u_counsellor and not db.query(Membership).filter(Membership.user_id == u_counsellor.id, Membership.organization_id == org_district.id).first():
+        memberships_to_add.append(Membership(user_id=u_counsellor.id, organization_id=org_district.id, role="staff", jurisdiction_scope="district"))
+    if u_finance and not db.query(Membership).filter(Membership.user_id == u_finance.id, Membership.organization_id == org_district.id).first():
+        memberships_to_add.append(Membership(user_id=u_finance.id, organization_id=org_district.id, role="staff", jurisdiction_scope="district"))
+    if u_provider and not db.query(Membership).filter(Membership.user_id == u_provider.id, Membership.organization_id == org_provider.id).first():
+        memberships_to_add.append(Membership(user_id=u_provider.id, organization_id=org_provider.id, role="admin", jurisdiction_scope="district"))
+    if u_employer and not db.query(Membership).filter(Membership.user_id == u_employer.id, Membership.organization_id == org_employer.id).first():
+        memberships_to_add.append(Membership(user_id=u_employer.id, organization_id=org_employer.id, role="staff", jurisdiction_scope="district"))
+
+    if memberships_to_add:
+        db.add_all(memberships_to_add)
 
     db.commit()
     print("[SEED] Demo data seeding completed successfully!")

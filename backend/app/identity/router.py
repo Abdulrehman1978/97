@@ -1,10 +1,12 @@
-from typing import Optional
+from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.app.config import settings
 from backend.app.database import get_db
 from backend.app.identity.models import User, Consent
+from backend.app.beneficiary.models import Beneficiary
+from backend.app.identity.policies import can_record_consent
 from backend.app.shared.security import create_access_token, hash_password, verify_password, get_current_user
 
 router = APIRouter(prefix="/identity", tags=["identity"])
@@ -75,8 +77,21 @@ def get_me(current_user: User = Depends(get_current_user)):
     }
 
 @router.post("/consent")
-def record_consent(req: ConsentRequest, db: Session = Depends(get_db)):
-    """Records layered consent with auditable purpose and audio retention options."""
+def record_consent(
+    req: ConsentRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
+    """Records layered consent with auditable purpose and authorization verification."""
+    ben = db.query(Beneficiary).filter(Beneficiary.id == req.beneficiary_id).first()
+    if not ben:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+    if not can_record_consent(current_user, ben, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Consent must be recorded by the beneficiary self or authorized assisted district mobilizer"
+        )
+
     consent = Consent(
         beneficiary_id=req.beneficiary_id,
         purpose=req.purpose,
