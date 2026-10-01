@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     ENABLE_MOCK_SPEECH: bool = True
     ENABLE_MOCK_TELEPHONY: bool = True
 
-    # External Provider Keys (Optional / Fallback)
+    # Configurable AI Provider Gateway (Optional / Fallback)
+    AI_PROVIDER: str = "deterministic"  # deterministic, deepseek, qwen, openai, gemini
+    AI_API_KEY: str = ""
+    AI_MODEL: str = ""
     SARVAM_API_KEY: str = ""
     BHASHINI_API_KEY: str = ""
     BHASHINI_USER_ID: str = ""

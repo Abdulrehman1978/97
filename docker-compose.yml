@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   backend:
@@ -12,10 +11,16 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/lip_db
       - DATABASE_SYNC_URL=postgresql://postgres:postgres@db:5432/lip_db
       - SECRET_KEY=${SECRET_KEY:-lip-production-secret-must-be-set-in-env}
-      - DEMO_MODE=false
+      - DEMO_MODE=${DEMO_MODE:-true}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
     restart: unless-stopped
 
   web:

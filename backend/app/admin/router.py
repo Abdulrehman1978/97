@@ -38,6 +38,11 @@ def get_district_dashboard(
     """
     if current_user.role == "district_admin":
         user_district = getattr(current_user, "district_code", None)
+        if not user_district:
+            from backend.app.identity.policies import get_user_jurisdictions
+            jurisdictions = get_user_jurisdictions(current_user, db)
+            if jurisdictions:
+                user_district = jurisdictions[0]
         if user_district and user_district != district_code:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
