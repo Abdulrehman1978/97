@@ -29,17 +29,20 @@ class ProjectProposalRequest(BaseModel):
 def get_district_dashboard(
     district_code: str = "MH-NAG",
     db: Session = Depends(get_db),
-    current_user: Optional[Any] = Depends(get_current_user_optional)
+    current_user: Any = Depends(require_roles("district_admin", "state_admin", "ministry_admin", "counsellor", "financial_counsellor"))
 ):
     """
     District Livelihood Intelligence Layer.
     Aggregates beneficiary demand, training supply, supply-demand gaps, and mobility barriers.
+    Requires administrative or counselling authorization.
     """
-    if current_user and current_user.role == "beneficiary":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Beneficiaries cannot access administrative intelligence"
-        )
+    if current_user.role == "district_admin":
+        user_district = getattr(current_user, "district_code", None)
+        if user_district and user_district != district_code:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Forbidden: Access restricted to authorized jurisdiction '{user_district}'"
+            )
 
     total_beneficiaries = db.query(Beneficiary).filter(Beneficiary.district_code == district_code).count()
     training_options = db.query(TrainingOption).join(TrainingCenter).filter(TrainingCenter.district_code == district_code).all()
@@ -78,11 +81,14 @@ def get_district_dashboard(
     }
 
 @router.post("/batch-planner")
-def simulate_training_batch(req: BatchSimulateRequest, db: Session = Depends(get_db)):
+def simulate_training_batch(
+    req: BatchSimulateRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("district_admin", "state_admin", "ministry_admin"))
+):
     """
     Simulates proposing a new training batch.
-    Calculates candidate pool, prerequisite feasibility, cost under PM-AJAY GIA norms,
-    and employer linkages.
+    Requires district, state, or ministry admin authorization.
     """
     qual = db.query(Qualification).filter(Qualification.qp_code == req.qualification_code).first()
     if not qual:
@@ -126,11 +132,14 @@ def simulate_training_batch(req: BatchSimulateRequest, db: Session = Depends(get
     }
 
 @router.post("/project-planner")
-def build_comprehensive_livelihood_project(req: ProjectProposalRequest, db: Session = Depends(get_db)):
+def build_comprehensive_livelihood_project(
+    req: ProjectProposalRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("district_admin", "state_admin", "ministry_admin"))
+):
     """
     Assembles evidence for a PM-AJAY Comprehensive Livelihood Project proposal.
-    Integrates needs assessment, skill component, enterprise grant component,
-    and monitoring framework.
+    Requires district, state, or ministry admin authorization.
     """
     return {
         "project_title": req.project_title,
@@ -171,8 +180,11 @@ def build_comprehensive_livelihood_project(req: ProjectProposalRequest, db: Sess
     }
 
 @router.get("/source-health")
-def list_source_health(db: Session = Depends(get_db)):
-    """Lists data sources, freshness SLA, and synchronization status."""
+def list_source_health(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("district_admin", "state_admin", "ministry_admin", "counsellor", "financial_counsellor", "field_worker", "provider", "employer"))
+):
+    """Lists data sources, freshness SLA, and synchronization status for authenticated platform stakeholders."""
     sources = db.query(Source).all()
     return [
         {
@@ -193,14 +205,9 @@ def list_source_health(db: Session = Depends(get_db)):
 def list_audit_logs(
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: Optional[Any] = Depends(get_current_user_optional)
+    current_user: Any = Depends(require_roles("district_admin", "state_admin", "ministry_admin"))
 ):
-    """Returns immutable security and override audit logs."""
-    if current_user and current_user.role not in ["district_admin", "state_admin", "ministry_admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Only administrators can view audit logs"
-        )
+    """Returns immutable security and override audit logs. Restricted strictly to administrators."""
     logs = db.query(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit).all()
     return [
         {

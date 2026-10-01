@@ -13,7 +13,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespassword
@@ -30,10 +30,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install Dependencies
@@ -46,17 +46,24 @@ jobs:
         run: |
           python -m py_compile backend/app/main.py
           python -m py_compile backend/app/database.py
+          python -m py_compile backend/app/seed.py
+          python -m py_compile backend/scripts/bootstrap_dev.py
+          python -m py_compile backend/scripts/seed_reference.py
+          python -m py_compile backend/scripts/seed_demo.py
 
       - name: Run Alembic Migrations against PostgreSQL
         env:
           DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
         run: |
           alembic upgrade head
+          alembic current
+          alembic heads
 
       - name: Run Pytest Test Suite
         env:
           DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
           SECRET_KEY: test-secret-key-for-ci-minimum-32-chars-long
+          DEMO_MODE: "true"
         run: |
           pytest -v
 
@@ -68,10 +75,44 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Web Dependencies (Clean Clone)
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Run TypeScript Typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+
+      - name: Run Next.js Production Build
+        working-directory: apps/web
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+
+  e2e-a11y-test:
+    name: Playwright E2E & Accessibility Suite
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: "npm"
           cache-dependency-path: apps/web/package-lock.json
 
@@ -79,8 +120,28 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
-      - name: Run TypeScript Typecheck & Production Build
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Web Application
         working-directory: apps/web
         run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000
+
+      - name: Run Playwright E2E & Accessibility Suite
+        working-directory: apps/web
+        run: npm run test:e2e
+
+  docker-smoke:
+    name: Docker Compose Build & Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose Config
+        run: docker compose config
+
+      - name: Build Backend & Web Images
+        run: docker compose build

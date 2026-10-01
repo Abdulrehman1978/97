@@ -16,9 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend application source
+# Copy backend application source and database migration configurations
 COPY backend /app/backend
+COPY alembic /app/alembic
+COPY alembic.ini /app/alembic.ini
 COPY pytest.ini /app/pytest.ini
+COPY backend/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Security: Run as unprivileged user
 RUN useradd -u 1001 -m -s /bin/bash appuser && \
@@ -30,4 +34,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8000/health/live || exit 1
 
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

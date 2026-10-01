@@ -52,8 +52,15 @@ def setup_journey_fixtures():
     db.commit()
     db.close()
 
+from backend.app.shared.security import create_access_token
+
+ben_token = create_access_token({"sub": "test-ben-1", "role": "beneficiary", "name": "Ramesh"})
+ben_headers = {"Authorization": f"Bearer {ben_token}"}
+worker_token = create_access_token({"sub": "test-worker-1", "role": "field_worker", "district_code": "MH-NAG", "name": "Worker"})
+worker_headers = {"Authorization": f"Bearer {worker_token}"}
+
 def test_get_journey_home():
-    res = client.get("/api/v1/journey/test-ben-1")
+    res = client.get("/api/v1/journey/test-ben-1", headers=ben_headers)
     assert res.status_code == 200
     data = res.json()
     assert "beneficiary_id" in data
@@ -66,7 +73,7 @@ def test_select_pathway():
         "title": "Automotive Two Wheeler Service Technician",
         "pathway_category": "wage_employment",
         "qualification_id": "test-qual-auto"
-    })
+    }, headers=ben_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "success"
@@ -79,15 +86,15 @@ def test_update_action_status():
         "beneficiary_id": "test-ben-1",
         "title": "Automotive Technician Pathway",
         "pathway_category": "wage_employment"
-    })
-    journey_res = client.get("/api/v1/journey/test-ben-1")
+    }, headers=ben_headers)
+    journey_res = client.get("/api/v1/journey/test-ben-1", headers=ben_headers)
     actions = journey_res.json()["action_plan"]
     assert len(actions) > 0
     action_id = actions[0]["id"]
 
     res = client.put(f"/api/v1/journey/actions/{action_id}", json={
         "status": "completed"
-    })
+    }, headers=ben_headers)
     assert res.status_code == 200
     assert res.json()["new_status"] == "completed"
 
@@ -97,7 +104,7 @@ def test_submit_grievance_returns_persisted_id():
         "category": "training_center",
         "title": "Stipend delay issue",
         "description": "Stipend for November not received yet"
-    })
+    }, headers=ben_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "submitted"
@@ -105,7 +112,7 @@ def test_submit_grievance_returns_persisted_id():
     assert len(data["grievance_id"]) > 5
 
 def test_get_cases_list():
-    res = client.get("/api/v1/journey/cases")
+    res = client.get("/api/v1/journey/cases", headers=worker_headers)
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
@@ -114,7 +121,7 @@ def test_get_cases_list():
     assert "status" in data[0]
 
 def test_get_and_update_coordination():
-    res = client.get("/api/v1/journey/coordination")
+    res = client.get("/api/v1/journey/coordination", headers=worker_headers)
     assert res.status_code == 200
     items = res.json()
     assert isinstance(items, list)
@@ -124,12 +131,12 @@ def test_get_and_update_coordination():
     update_res = client.put(f"/api/v1/journey/coordination/{item_id}/status", json={
         "status": "acknowledged",
         "blocker_reason": "Hostel room allocated on 2nd floor"
-    })
+    }, headers=worker_headers)
     assert update_res.status_code == 200
     assert update_res.json()["status"] == "updated"
 
 def test_get_enterprise_plan():
-    res = client.get("/api/v1/journey/enterprise/test-ben-1")
+    res = client.get("/api/v1/journey/enterprise/test-ben-1", headers=ben_headers)
     assert res.status_code == 200
     data = res.json()
     assert "assumed_capital_needs" in data
@@ -146,7 +153,7 @@ def test_record_outcome():
         "wage_band_inr": "15000-18000",
         "retention_90d_verified": True,
         "retention_180d_verified": False
-    })
+    }, headers=worker_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "outcome_recorded"

@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from backend.app.config import settings
 from backend.app.database import get_db
 from backend.app.identity.models import User, Consent
 from backend.app.shared.security import create_access_token, hash_password, verify_password, get_current_user
@@ -89,6 +90,11 @@ def record_consent(req: ConsentRequest, db: Session = Depends(get_db)):
 @router.post("/demo/switch-role")
 def demo_switch_role(req: DemoSwitchRoleRequest):
     """SIH Judge & Demonstration utility to simulate switching active user roles."""
+    if not settings.DEMO_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Demo role switcher is disabled in production mode"
+        )
     token = create_access_token({"sub": f"demo-{req.role}", "role": req.role, "name": f"Demo {req.role.title()}"})
     return {
         "active_role": req.role,

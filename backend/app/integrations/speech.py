@@ -27,7 +27,7 @@ class SpeechGateway:
                 "confidence": 0.94,
                 "language": language,
                 "provider": self.provider,
-                "truth_state": "LIVE"
+                "truth_state": "DEMO_DATA"
             }
         
         # Default fallback transcript for testing
@@ -36,7 +36,7 @@ class SpeechGateway:
             "confidence": 0.92,
             "language": language,
             "provider": "default_indic_gateway",
-            "truth_state": "LIVE"
+            "truth_state": "DEMO_DATA"
         }
 
     def synthesize_speech(self, text: str, language: str = "mr") -> Dict[str, Any]:
@@ -48,7 +48,7 @@ class SpeechGateway:
             "voice_name": lang_config["default_voice"],
             "audio_format": "mp3_or_browser_synth",
             "status": "ready",
-            "truth_state": "LIVE"
+            "truth_state": "SANDBOX"
         }
 
 speech_gateway = SpeechGateway()

@@ -49,6 +49,8 @@ export function Navbar() {
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700">
             <Globe className="w-3.5 h-3.5 text-slate-500" />
             <select
+              id="language-selector"
+              aria-label="भाषा निवडा / Select Language"
               value={lang}
               onChange={(e) => setLang(e.target.value)}
               className="bg-transparent border-none text-xs focus:ring-0 cursor-pointer"

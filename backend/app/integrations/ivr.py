@@ -33,7 +33,7 @@ class IVRStateMachine:
                 "action": "play_and_get_digits",
                 "prompt_text": "नमस्कार. पीएम-अजय उपजीविका सहाय्यकात आपले स्वागत आहे. मराठीसाठी 1 दाबा, हिंदी के लिए 2 दबाएं, For English press 3.",
                 "dtmf_timeout_sec": 5,
-                "truth_state": "LIVE"
+                "truth_state": "SANDBOX"
             }
 
         session = IVR_SESSIONS[session_id]
@@ -61,7 +61,7 @@ class IVRStateMachine:
                 "prompt_text": prompt,
                 "max_recording_sec": 30,
                 "finish_on_key": "#",
-                "truth_state": "LIVE"
+                "truth_state": "SANDBOX"
             }
 
         # Step 1: Process Spoken Experience
@@ -79,7 +79,7 @@ class IVRStateMachine:
                 "action": "play_and_get_digits",
                 "prompt_text": prompt,
                 "expected_digits": 1,
-                "truth_state": "LIVE"
+                "truth_state": "SANDBOX"
             }
 
         # Step 2: Mobility & Complete
@@ -106,9 +106,10 @@ class IVRStateMachine:
                 "session_id": session_id,
                 "action": "play_and_hangup",
                 "prompt_text": summary,
-                "sms_dispatched": True,
+                "sms_dispatched": False,
+                "sms_status": "SANDBOX",
                 "sms_preview": f"LIP PM-AJAY: Verified pathway 'Two-Wheeler Service Technician' (NSQF L4). Free batch at Hingna Center. Call 1800-XXX-XXXX for counsellor.",
-                "truth_state": "LIVE"
+                "truth_state": "SANDBOX"
             }
 
         return {"session_id": session_id, "action": "hangup", "prompt_text": "Good bye"}
@@ -122,5 +123,5 @@ class IVRStateMachine:
             "sla_callback_minutes": 15,
             "ticket_code": f"CALL-{phone_number[-4:]}",
             "message": "Automated IVR callback scheduled to minimize citizen mobile balance expense.",
-            "truth_state": "LIVE"
+            "truth_state": "SANDBOX"
         }

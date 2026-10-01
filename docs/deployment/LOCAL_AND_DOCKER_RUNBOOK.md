@@ -1,24 +1,31 @@
 # Local & Docker Runbook (SIH26097)
 **Platform**: PM-AJAY Livelihood Intelligence Platform (LIP)  
 **Target Environment**: Local Developer Workstation, Testing VM, or Docker Engine  
-**Last Verified**: 30 September 2026  
+**Last Verified**: 01 October 2026  
+**Toolchain**: Python 3.12 (or 3.14 local), Node.js 22, PostgreSQL 16  
 
 ---
 
-## 1. Quick Start: Docker Compose (Zero Configuration)
+## 1. Quick Start: Docker Compose
 
-To run the complete production-grade stack (PostgreSQL + FastAPI Backend + Next.js Frontend) from a fresh clone:
-
+### Production Profile (Default)
+Executes migration-first entrypoint, strictly disables demo role switcher, requires environment secrets:
 ```powershell
 # 1. Clone repository
 git clone https://github.com/Abdulrehman1978/97.git
 cd 97
 
-# 2. Start all services via Docker Compose
+# 2. Start production containers
 docker compose up --build -d
 
 # 3. Verify container health
 docker compose ps
+```
+
+### SIH Judge / Evaluation Demo Profile
+Enables interactive evaluator role switching, seeds Ramesh Mesram demo persona, Nagpur pilot demand, and mock telephony:
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build -d
 ```
 
 ### Verified Service Ports
@@ -33,8 +40,8 @@ docker compose ps
 ## 2. Bare-Metal Developer Setup (Windows / Linux / macOS)
 
 ### Prerequisites
-- Python 3.11+ (Python 3.11 or 3.14 verified)
-- Node.js 20+ (with npm)
+- Python 3.12+ (Python 3.12 or 3.14 verified)
+- Node.js 22+ (with npm)
 - Git
 
 ### Backend Setup
@@ -51,11 +58,14 @@ pip install --upgrade pip
 pip install -r backend/requirements.txt
 pip install pytest pytest-asyncio httpx
 
-# Run Alembic migrations (creates PostgreSQL / SQLite schema)
+# Run Alembic migrations (creates complete 39-table schema on clean DB)
 alembic upgrade head
 
-# Seed initial official taxonomies and authenticated users
-python -m backend.app.seed
+# Seed official reference taxonomies (NCO, NSQF, PM-AJAY rules)
+python -m backend.scripts.seed_reference
+
+# (Optional: for local demo/testing only) Seed demo personas & vacancies
+python -m backend.scripts.seed_demo
 
 # Start FastAPI development server
 uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -63,42 +73,29 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Frontend Setup
 ```powershell
-# Open a second terminal and navigate to apps/web
 cd C:\97\apps\web
 
-# Install npm dependencies
+# Clean deterministic install using committed lockfile
 npm ci
 
-# Run development server
-npm run dev
-# Or build and run production server:
+# Typecheck and linting
+npm run lint
+npm run typecheck
+
+# Production build
 npm run build
-npm start
+
+# Start production server
+npm run start
 ```
 
----
-
-## 3. Seeded Authenticated Test Accounts
-
-| Role | Username / Email | Password | Primary Purpose |
-|---|---|---|---|
-| **District Admin** | `admin@nagpur.gov.in` | `admin123` | District demand dashboard, batch proposals, audit logs |
-| **Field Mobilizer** | `worker@nagpur.gov.in` | `worker123` | Door-to-door caseload, survey validation |
-| **Livelihood Counsellor** | `counsellor@nagpur.gov.in` | `counsel123` | Candidate review, pathway overrides with audit trail |
-| **Financial Counsellor** | `finance@nagpur.gov.in` | `finance123` | Enterprise capex/opex pre-screening, GIA subsidies |
-| **Training Provider (PIA)**| `provider@pmkk.gov.in` | `provider123` | Batch capacity creation, enrollment verification |
-| **Employer** | `employer@mahavitaran.com` | `employer123` | Job postings, candidate shortlisting (caste-redacted) |
-| **Beneficiary** | `ramesh@beneficiary.lip` | `ramesh123` | Voice interview, skill passport, living pathways, journey |
-
----
-
-## 4. Running the Automated Test Suite
-
+### Test Suite Execution
 ```powershell
-# Run backend pytest suite (46 automated tests)
-pytest -v
+# Run backend pytest suite (58 tests)
+cd C:\97
+.\.venv\Scripts\pytest -v
 
-# Run frontend production build & TypeScript typecheck
-cd apps/web
-npm run build
+# Run Playwright E2E and axe-core accessibility suite (14 tests)
+cd C:\97\apps\web
+npx playwright test
 ```

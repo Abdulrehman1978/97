@@ -15,4 +15,4 @@ def test_health_ready():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ready"
-    assert data["truth_state"] == "LIVE"
+    assert data["database"] == "ok"

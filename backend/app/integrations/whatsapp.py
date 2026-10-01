@@ -37,5 +37,5 @@ class WhatsAppAdapter:
             "recipient": from_number,
             "message": reply_text,
             "status": "delivered_to_sandbox",
-            "truth_state": "LIVE"
+            "truth_state": "SANDBOX"
         }

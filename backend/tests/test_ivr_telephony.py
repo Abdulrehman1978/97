@@ -33,7 +33,9 @@ def test_ivr_full_turn_sequence():
     assert r3.status_code == 200
     d3 = r3.json()
     assert d3["action"] == "play_and_hangup"
-    assert d3["sms_dispatched"] is True
+    assert d3["sms_dispatched"] is False
+    assert d3["sms_status"] == "SANDBOX"
+    assert d3["truth_state"] == "SANDBOX"
     assert "दुचाकी सर्व्हिस टेक्निशियन" in d3["prompt_text"]
 
 def test_ivr_missed_call_callback():
@@ -42,4 +44,5 @@ def test_ivr_missed_call_callback():
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "callback_queued"
+    assert data["truth_state"] == "SANDBOX"
     assert data["sla_callback_minutes"] <= 15

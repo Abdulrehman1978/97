@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional, List, Any
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
@@ -8,6 +8,8 @@ from backend.app.journey.models import Pathway, PathwayAction, Case, CaseEvent, 
 from backend.app.beneficiary.models import Beneficiary
 from backend.app.opportunities.models import Application
 from backend.app.admin.models import AuditEvent
+from backend.app.shared.security import get_current_user, require_roles
+from backend.app.config import settings
 
 router = APIRouter(prefix="/journey", tags=["journey"])
 
@@ -21,7 +23,7 @@ class UpdateActionRequest(BaseModel):
     status: str # pending, in_progress, completed, skipped
 
 class CounsellorOverrideRequest(BaseModel):
-    counsellor_user_id: str
+    counsellor_user_id: Optional[str] = None
     original_recommendation_title: str
     new_pathway_title: str
     mandatory_reason: str
@@ -47,8 +49,18 @@ class RecordOutcomeRequest(BaseModel):
 
 @router.post("/grievance")
 @router.post("/grievances")
-def file_grievance(req: SubmitGrievanceRequest, db: Session = Depends(get_db)):
+def file_grievance(
+    req: SubmitGrievanceRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Submit a beneficiary grievance with registered audit ID."""
+    if current_user.role == "beneficiary":
+        if current_user.id != req.beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries can only file grievances for themselves")
+    elif current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role to file beneficiary grievances")
+
     g = Grievance(
         beneficiary_id=req.beneficiary_id,
         category=req.category,
@@ -61,8 +73,19 @@ def file_grievance(req: SubmitGrievanceRequest, db: Session = Depends(get_db)):
     return {"status": "submitted", "grievance_id": g.id}
 
 @router.get("/cases")
-def list_cases(district_code: str = "MH-NAG", db: Session = Depends(get_db)):
-    """List assigned cases for field workers and counsellors."""
+def list_cases(
+    district_code: str = "MH-NAG",
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("field_worker", "counsellor", "financial_counsellor", "district_admin", "state_admin", "ministry_admin"))
+):
+    """List assigned cases for field workers and counsellors with jurisdiction scoping."""
+    if current_user.role in ["field_worker", "district_admin"]:
+        user_district = getattr(current_user, "district_code", None)
+        if user_district and district_code and user_district != district_code:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot access cases outside assigned district")
+        if user_district:
+            district_code = user_district
+
     cases = db.query(Case).all()
     res = []
     for c in cases:
@@ -84,7 +107,10 @@ def list_cases(district_code: str = "MH-NAG", db: Session = Depends(get_db)):
     return res
 
 @router.get("/coordination")
-def list_coordination_items(db: Session = Depends(get_db)):
+def list_coordination_items(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("field_worker", "counsellor", "financial_counsellor", "provider", "district_admin", "state_admin", "ministry_admin"))
+):
     """Inter-Agency Coordination workspace: lists cross-department referrals, SLA, and blockers."""
     from backend.app.journey.models import Referral
     referrals = db.query(Referral).all()
@@ -109,7 +135,12 @@ def list_coordination_items(db: Session = Depends(get_db)):
     return items
 
 @router.put("/coordination/{referral_id}/status")
-def update_coordination_status(referral_id: str, req: UpdateCoordinationStatusRequest, db: Session = Depends(get_db)):
+def update_coordination_status(
+    referral_id: str,
+    req: UpdateCoordinationStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("field_worker", "counsellor", "financial_counsellor", "provider", "district_admin", "state_admin", "ministry_admin"))
+):
     """Update referral state and SLA blocker in coordination workspace."""
     from backend.app.journey.models import Referral
     ref = db.query(Referral).filter(Referral.id == referral_id).first()
@@ -122,8 +153,18 @@ def update_coordination_status(referral_id: str, req: UpdateCoordinationStatusRe
     return {"status": "updated", "referral_id": ref.id, "new_status": ref.status}
 
 @router.get("/enterprise/{beneficiary_id}")
-def get_or_create_enterprise_plan(beneficiary_id: str, db: Session = Depends(get_db)):
+def get_or_create_enterprise_plan(
+    beneficiary_id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Financial & Enterprise Counsellor: returns structured capital bands and pre-screened schemes."""
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for enterprise plans")
+    if current_user.role == "beneficiary":
+        if current_user.id != beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot access another beneficiary's enterprise plan")
+
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=404, detail="Beneficiary not found")
@@ -189,7 +230,11 @@ def get_or_create_enterprise_plan(beneficiary_id: str, db: Session = Depends(get
     }
 
 @router.post("/outcomes")
-def record_outcome(req: RecordOutcomeRequest, db: Session = Depends(get_db)):
+def record_outcome(
+    req: RecordOutcomeRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("field_worker", "counsellor", "employer", "provider", "district_admin", "state_admin", "ministry_admin"))
+):
     """Record durable livelihood outcome and retention verification."""
     outcome = Outcome(
         beneficiary_id=req.beneficiary_id,
@@ -206,7 +251,11 @@ def record_outcome(req: RecordOutcomeRequest, db: Session = Depends(get_db)):
     return {"status": "outcome_recorded", "outcome_id": outcome.id, "milestone": "30_day" if req.retention_90d_verified else "initial"}
 
 @router.get("/{beneficiary_id}")
-def get_beneficiary_journey_home(beneficiary_id: str, db: Session = Depends(get_db)):
+def get_beneficiary_journey_home(
+    beneficiary_id: str,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """
     Returning-user home endpoint.
     Prioritizes:
@@ -215,6 +264,12 @@ def get_beneficiary_journey_home(beneficiary_id: str, db: Session = Depends(get_
     3. Action Plan checklist
     4. Application status
     """
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for journey home")
+    if current_user.role == "beneficiary":
+        if current_user.id != beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot view another beneficiary's journey")
+
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=404, detail="Beneficiary not found")
@@ -278,8 +333,18 @@ def get_beneficiary_journey_home(beneficiary_id: str, db: Session = Depends(get_
     }
 
 @router.post("/select-pathway")
-def select_pathway(req: SelectPathwayRequest, db: Session = Depends(get_db)):
+def select_pathway(
+    req: SelectPathwayRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Beneficiary selects a pathway; auto-generates sequential actionable steps."""
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for pathway selection")
+    if current_user.role == "beneficiary":
+        if current_user.id != req.beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot select pathway for another beneficiary")
+
     # Deactivate existing active pathways
     db.query(Pathway).filter(Pathway.beneficiary_id == req.beneficiary_id, Pathway.status == "active").update({"status": "archived"})
 
@@ -333,11 +398,24 @@ def select_pathway(req: SelectPathwayRequest, db: Session = Depends(get_db)):
     return {"status": "success", "pathway_id": pathway.id, "title": pathway.title}
 
 @router.put("/actions/{action_id}")
-def update_action_status(action_id: str, req: UpdateActionRequest, db: Session = Depends(get_db)):
+def update_action_status(
+    action_id: str,
+    req: UpdateActionRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Update action status with completion timestamp."""
     act = db.query(PathwayAction).filter(PathwayAction.id == action_id).first()
     if not act:
         raise HTTPException(status_code=404, detail="Action not found")
+
+    pathway = db.query(Pathway).filter(Pathway.id == act.pathway_id).first()
+    if current_user.role == "beneficiary":
+        if pathway and pathway.beneficiary_id != current_user.id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot update actions for another beneficiary")
+    elif current_user.role in ["employer", "provider"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for action updates")
+
     act.status = req.status
     if req.status == "completed":
         act.completed_at = datetime.utcnow()
@@ -345,7 +423,12 @@ def update_action_status(action_id: str, req: UpdateActionRequest, db: Session =
     return {"status": "updated", "action_id": act.id, "new_status": act.status}
 
 @router.post("/cases/{case_id}/override")
-def counsellor_override(case_id: str, req: CounsellorOverrideRequest, db: Session = Depends(get_db)):
+def counsellor_override(
+    case_id: str,
+    req: CounsellorOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("counsellor", "financial_counsellor", "district_admin", "state_admin", "ministry_admin"))
+):
     """Counsellor overrides AI recommendation. Mandatory reason is logged in immutable audit."""
     if not req.mandatory_reason.strip():
         raise HTTPException(status_code=400, detail="Mandatory reason must be provided for override")
@@ -354,19 +437,19 @@ def counsellor_override(case_id: str, req: CounsellorOverrideRequest, db: Sessio
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
 
-    # Add case event
+    # Add case event with trusted authenticated actor
     event = CaseEvent(
         case_id=case_id,
-        actor_user_id=req.counsellor_user_id,
+        actor_user_id=current_user.id,
         event_type="recommendation_override",
         notes=f"Overrode '{req.original_recommendation_title}' with '{req.new_pathway_title}'. Reason: {req.mandatory_reason}"
     )
     db.add(event)
 
-    # Add audit event
+    # Add audit event with trusted authenticated actor
     audit = AuditEvent(
-        actor_user_id=req.counsellor_user_id,
-        actor_role="counsellor",
+        actor_user_id=current_user.id,
+        actor_role=current_user.role,
         action="counsellor_override",
         entity_type="case",
         entity_id=case_id,

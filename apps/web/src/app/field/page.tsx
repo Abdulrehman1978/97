@@ -158,7 +158,7 @@ export default function FieldWorkerPage() {
             <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 font-medium">
               ✓ शिफारस यशस्वीरित्या बदलली गेली! अपरिवर्तनीय ऑडिट लॉगमध्ये कारण नोंदवले गेले आहे: 
               <br />
-              <em className="text-slate-700">"{overrideReason}"</em>
+              <em className="text-slate-700">&quot;{overrideReason}&quot;</em>
             </div>
           ) : (
             <form onSubmit={handleOverride} className="mt-4 space-y-3">

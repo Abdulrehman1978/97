@@ -15,10 +15,19 @@ from backend.app.journey.router import router as journey_router
 from backend.app.integrations.router import router as integrations_router
 from backend.app.admin.router import router as admin_router
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from fastapi import status, HTTPException, Depends
+from backend.app.database import get_db
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Ensure tables and reference seed data exist on launch."""
-    seed_database()
+    """Lifespan handler: in demo mode ensures seed data exists without create_all."""
+    if settings.DEMO_MODE:
+        try:
+            seed_database(include_demo=True)
+        except Exception as e:
+            print(f"[STARTUP] Seed notice: {e}")
     yield
 
 app = FastAPI(
@@ -54,13 +63,20 @@ def health_live():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
 
 @app.get("/health/ready")
-def health_ready():
-    """Readiness probe: verifies database connectivity and core subsystems."""
+def health_ready(db: Session = Depends(get_db)):
+    """Readiness probe: verifies database connectivity with SELECT 1."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database readiness probe failed: {str(e)}"
+        )
     return {
         "status": "ready",
-        "database": "connected",
+        "database": "ok",
         "demo_mode": settings.DEMO_MODE,
-        "truth_state": "LIVE",
+        "truth_state": "LIVE" if not settings.DEMO_MODE else "DEMO_DATA",
         "architecture": "FastAPI Modular Monolith (8 Modules)"
     }
 

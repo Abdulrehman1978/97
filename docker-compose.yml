@@ -11,8 +11,8 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/lip_db
       - DATABASE_SYNC_URL=postgresql://postgres:postgres@db:5432/lip_db
-      - SECRET_KEY=production-demo-secret-key-lip-sih26097-secured
-      - DEMO_MODE=true
+      - SECRET_KEY=${SECRET_KEY:-lip-production-secret-must-be-set-in-env}
+      - DEMO_MODE=false
     depends_on:
       db:
         condition: service_healthy
@@ -27,7 +27,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   db:

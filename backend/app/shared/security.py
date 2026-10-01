@@ -98,18 +98,29 @@ def get_current_user_optional(
     sub = payload.get("sub")
     if not sub:
         return None
-    # Support isolated judge demo tokens
+    # Support isolated judge demo tokens ONLY when DEMO_MODE is True
     if str(sub).startswith("demo-"):
+        if not settings.DEMO_MODE:
+            return None
         role = payload.get("role", "beneficiary")
-        return User(
+        user = User(
             id=str(sub),
             full_name=payload.get("name", f"Demo {role.title()}"),
             role=role,
             is_active=True
         )
+        if "district_code" in payload:
+            setattr(user, "district_code", payload["district_code"])
+        if "organization_id" in payload:
+            setattr(user, "organization_id", payload["organization_id"])
+        return user
     user = db.query(User).filter(User.id == sub).first()
     if not user or not user.is_active:
         return None
+    if "district_code" in payload:
+        setattr(user, "district_code", payload["district_code"])
+    if "organization_id" in payload:
+        setattr(user, "organization_id", payload["organization_id"])
     return user
 
 def get_current_user(

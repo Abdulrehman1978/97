@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
+from backend.app.shared.security import create_access_token
 
 client = TestClient(app)
 
@@ -16,7 +17,11 @@ def test_list_training_options_and_centers():
 
 def test_candidate_matching_with_strict_caste_isolation():
     """Verify Section 8.17 & 13.3: Employers never receive caste or sensitive social identity."""
-    res = client.get("/api/v1/opportunities/candidates?district_code=MH-NAG")
+    employer_token = create_access_token({"sub": "employer-test-uuid", "role": "employer", "organization_id": "test-org-1", "name": "Test Employer"})
+    res = client.get(
+        "/api/v1/opportunities/candidates?district_code=MH-NAG",
+        headers={"Authorization": f"Bearer {employer_token}"}
+    )
     assert res.status_code == 200
     candidates = res.json()
     assert len(candidates) > 0
@@ -32,19 +37,21 @@ def test_candidate_matching_with_strict_caste_isolation():
         assert "privacy_notice" in can
 
 def test_create_and_update_application():
+    ben_token = create_access_token({"sub": "test-b-1", "role": "beneficiary", "name": "Beneficiary 1"})
     # Submit application
     app_res = client.post("/api/v1/opportunities/apply", json={
         "beneficiary_id": "test-b-1",
         "opportunity_id": None,
         "training_option_id": "test-opt-1",
         "application_type": "training"
-    })
+    }, headers={"Authorization": f"Bearer {ben_token}"})
     assert app_res.status_code == 200
     app_id = app_res.json()["application_id"]
     
-    # Update status
+    # Update status with admin/provider token
+    admin_token = create_access_token({"sub": "test-admin-uuid", "role": "district_admin", "district_code": "MH-NAG", "name": "Admin"})
     up_res = client.put(f"/api/v1/opportunities/applications/{app_id}/status", json={
         "status": "shortlisted"
-    })
+    }, headers={"Authorization": f"Bearer {admin_token}"})
     assert up_res.status_code == 200
     assert up_res.json()["new_status"] == "shortlisted"

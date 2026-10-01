@@ -119,7 +119,7 @@ export default function JudgeDemoPage() {
               <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                 ⚡ SIH26097 Official Judge & Evaluation Environment
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state="DEMO_DATA" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
               प्रणाली प्रात्यक्षिक व मूल्यमापन केंद्र (Judge Demo Desk)
@@ -253,6 +253,7 @@ export default function JudgeDemoPage() {
                   </label>
                   <input
                     type="range"
+                    aria-label="प्रवास मर्यादा: किमी / Travel Radius km"
                     min={5}
                     max={40}
                     step={5}
@@ -320,11 +321,14 @@ export default function JudgeDemoPage() {
         {activeTab === "ivr_simulator" && (
           <div className="space-y-6">
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-              <h2 className="text-base font-bold text-slate-900 mb-1">
-                वैशिष्ट्यपूर्ण फोनसाठी आयव्हीआर टेलिफोनी सिम्युलेटर (Feature-Phone IVR)
-              </h2>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-base font-bold text-slate-900">
+                  वैशिष्ट्यपूर्ण फोनसाठी आयव्हीआर टेलिफोनी सिम्युलेटर (Feature-Phone IVR)
+                </h2>
+                <TruthBadge state="SANDBOX" />
+              </div>
               <p className="text-xs text-slate-500 mb-4">
-                स्मार्टफोन नसलेल्या ग्रामीण लाभार्थ्यांसाठी फोन कॉल आणि डीटीएमएफ बटण आधारित संवाद.
+                स्मार्टफोन नसलेल्या ग्रामीण लाभार्थ्यांसाठी फोन कॉल आणि डीटीएमएफ बटण आधारित संवाद (Carrier Status: SANDBOX).
               </p>
 
               {!ivrSession ? (
@@ -364,7 +368,7 @@ export default function JudgeDemoPage() {
 
                   {ivrSms && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900">
-                      <strong>📱 लाभार्थ्याला मिळालेला एसएमएस (SMS Dispatched):</strong>
+                      <strong>📱 लाभार्थ्याला पाठवलेला संदेश (SMS Status: SANDBOX Preview):</strong>
                       <p className="mt-1 font-mono text-[11px]">{ivrSms}</p>
                     </div>
                   )}

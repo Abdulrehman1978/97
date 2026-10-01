@@ -3,11 +3,12 @@
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)](https://nextjs.org)
-[![Python 3.14](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)](https://python.org)
-[![TailwindCSS v4](https://img.shields.io/badge/Tailwind-v4.0-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./THIRD_PARTY_NOTICES.md)
-[![Tests: 46 Passed](https://img.shields.io/badge/Pytest-46%20Passed-brightgreen)](./backend/tests)
-[![GIGW 3.0 / WCAG 2.2 AA](https://img.shields.io/badge/Compliance-GIGW%203.0%20%7C%20WCAG%202.2%20AA-success)](./docs/compliance)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white)](https://python.org)
+[![Node.js 22](https://img.shields.io/badge/Node.js-22-green?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Pytest: 58 Passed](https://img.shields.io/badge/Pytest-58%20Passed-brightgreen)](./backend/tests)
+[![Playwright: 14 Passed](https://img.shields.io/badge/Playwright-14%20Passed-brightgreen)](./apps/web/tests)
+[![WCAG 2.2 AA / GIGW 3.0](https://img.shields.io/badge/Compliance-WCAG%202.2%20AA%20%7C%20GIGW%203.0-success)](./docs/compliance/ACCESSIBILITY_EVIDENCE.md)
 [![Docker Ready](https://img.shields.io/badge/Docker-Compose%20Ready-blue?logo=docker&logoColor=white)](./docs/deployment/LOCAL_AND_DOCKER_RUNBOOK.md)
 
 ---

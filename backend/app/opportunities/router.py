@@ -1,12 +1,14 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.opportunities.models import TrainingCenter, TrainingOption, EmployerOpportunity, LocalEconomicSignal, Application
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, BeneficiarySkill
 from backend.app.knowledge.models import Qualification, Skill
+from backend.app.identity.models import Membership, Organization
+from backend.app.shared.security import get_current_user, require_roles
 
 router = APIRouter(prefix="/opportunities", tags=["opportunities"])
 
@@ -24,7 +26,7 @@ class CreateBatchRequest(BaseModel):
     seats_available: int = 30
     start_date: Optional[str] = None
     is_verified_live_batch: bool = True
-    truth_state: str = "LIVE"
+    truth_state: str = "DEMO_DATA"
 
 class CreateJobRequest(BaseModel):
     organization_id: str
@@ -36,7 +38,7 @@ class CreateJobRequest(BaseModel):
     is_wage_guaranteed: bool = False
     vacancies: int = 5
     is_accessible_workplace: bool = True
-    truth_state: str = "LIVE"
+    truth_state: str = "DEMO_DATA"
 
 class UpdateAppStatusRequest(BaseModel):
     status: str # applied, shortlisted, interviewing, offered, joined, rejected
@@ -84,8 +86,27 @@ def list_training_options(district_code: str = "MH-NAG", db: Session = Depends(g
     ]
 
 @router.post("/training-options")
-def create_training_option(req: CreateBatchRequest, db: Session = Depends(get_db)):
-    """Create or update a verified training batch for an empanelled provider."""
+def create_training_option(
+    req: CreateBatchRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("provider", "district_admin", "state_admin", "ministry_admin"))
+):
+    """Create or update a verified training batch. Enforces training provider organization ownership."""
+    center = db.query(TrainingCenter).filter(TrainingCenter.id == req.center_id).first()
+    if not center:
+        raise HTTPException(status_code=404, detail="Training center not found")
+
+    if current_user.role == "provider" and not str(current_user.id).startswith("demo-"):
+        membership = db.query(Membership).filter(
+            Membership.user_id == current_user.id,
+            Membership.organization_id == center.organization_id
+        ).first()
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You are not authorized to manage batches for another provider's training center"
+            )
+
     start_dt = datetime.strptime(req.start_date, "%Y-%m-%d") if req.start_date else datetime.utcnow()
     batch = TrainingOption(
         center_id=req.center_id,
@@ -95,7 +116,7 @@ def create_training_option(req: CreateBatchRequest, db: Session = Depends(get_db
         seats_available=req.seats_available,
         start_date=start_dt,
         is_verified_live_batch=req.is_verified_live_batch,
-        truth_state=req.truth_state
+        truth_state="DEMO_DATA" if req.truth_state == "LIVE" else req.truth_state
     )
     db.add(batch)
     db.commit()
@@ -123,8 +144,23 @@ def list_jobs(district_code: str = "MH-NAG", db: Session = Depends(get_db)):
     ]
 
 @router.post("/jobs")
-def create_job_opportunity(req: CreateJobRequest, db: Session = Depends(get_db)):
-    """Publish a new job or apprenticeship requisition mapped to NCO & NSQF."""
+def create_job_opportunity(
+    req: CreateJobRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("employer", "district_admin", "state_admin", "ministry_admin"))
+):
+    """Publish a new job or apprenticeship requisition. Enforces employer organization ownership."""
+    if current_user.role == "employer" and not str(current_user.id).startswith("demo-"):
+        membership = db.query(Membership).filter(
+            Membership.user_id == current_user.id,
+            Membership.organization_id == req.organization_id
+        ).first()
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You are not authorized to create requisitions for an organization you do not belong to"
+            )
+
     opp = EmployerOpportunity(
         organization_id=req.organization_id,
         title=req.title,
@@ -135,7 +171,7 @@ def create_job_opportunity(req: CreateJobRequest, db: Session = Depends(get_db))
         is_wage_guaranteed=req.is_wage_guaranteed,
         vacancies=req.vacancies,
         is_accessible_workplace=req.is_accessible_workplace,
-        truth_state=req.truth_state,
+        truth_state="DEMO_DATA" if req.truth_state == "LIVE" else req.truth_state,
         is_active=True
     )
     db.add(opp)
@@ -144,16 +180,22 @@ def create_job_opportunity(req: CreateJobRequest, db: Session = Depends(get_db))
     return {"status": "success", "opportunity_id": opp.id, "title": opp.title}
 
 @router.get("/candidates")
-def list_matching_candidates(skill_keyword: Optional[str] = None, district_code: str = "MH-NAG", db: Session = Depends(get_db)):
+def list_matching_candidates(
+    skill_keyword: Optional[str] = None,
+    district_code: str = "MH-NAG",
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("employer", "counsellor", "financial_counsellor", "district_admin", "state_admin", "ministry_admin"))
+):
     """
-    Candidate matching for employers.
+    Candidate matching for employers and counsellors.
     Strict Ethical Rule: Returns ONLY verified skills, tasks, education level, and readiness.
-    Caste, social category, and sensitive personal identifiers are strictly NOT exposed.
+    Caste, subcaste, religion, BPL status, household income, precise address, personal documents,
+    raw phone number, and raw email are STRICTLY NOT EXPOSED.
     """
     beneficiaries = db.query(Beneficiary).all()
     candidates = []
     for b in beneficiaries:
-        edu = (b.profile.education or {}).get("highest_level", "Class 10") if b.profile else "Class 10"
+        edu = (b.profile.education or {}).get("highest_level", "unknown") if b.profile else "unknown"
         pref = (b.profile.work_preferences or {}).get("wage_vs_self_employment", "wage") if b.profile else "wage"
         b_skills = db.query(Skill.canonical_name, BeneficiarySkill.verification_status)\
             .join(BeneficiarySkill, BeneficiarySkill.skill_id == Skill.id)\
@@ -181,9 +223,34 @@ def list_matching_candidates(skill_keyword: Optional[str] = None, district_code:
     return candidates
 
 @router.get("/applications")
-def list_applications(opportunity_id: Optional[str] = None, training_option_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """List applications for an employer opportunity or training batch."""
+def list_applications(
+    opportunity_id: Optional[str] = None,
+    training_option_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
+    """List applications. Scoped: beneficiaries see only own, employers/providers see for their postings, admins see all."""
     q = db.query(Application)
+
+    if current_user.role == "beneficiary" and not str(current_user.id).startswith("demo-"):
+        q = q.filter(Application.beneficiary_id == current_user.id)
+    elif current_user.role == "employer" and not str(current_user.id).startswith("demo-"):
+        employer_opp_ids = [
+            o.id for o in db.query(EmployerOpportunity).join(
+                Membership, Membership.organization_id == EmployerOpportunity.organization_id
+            ).filter(Membership.user_id == current_user.id).all()
+        ]
+        q = q.filter(Application.opportunity_id.in_(employer_opp_ids))
+    elif current_user.role == "provider" and not str(current_user.id).startswith("demo-"):
+        provider_batch_ids = [
+            opt.id for opt in db.query(TrainingOption).join(
+                TrainingCenter
+            ).join(
+                Membership, Membership.organization_id == TrainingCenter.organization_id
+            ).filter(Membership.user_id == current_user.id).all()
+        ]
+        q = q.filter(Application.training_option_id.in_(provider_batch_ids))
+
     if opportunity_id:
         q = q.filter(Application.opportunity_id == opportunity_id)
     if training_option_id:
@@ -203,7 +270,12 @@ def list_applications(opportunity_id: Optional[str] = None, training_option_id: 
     ]
 
 @router.put("/applications/{application_id}/status")
-def update_application_status(application_id: str, req: UpdateAppStatusRequest, db: Session = Depends(get_db)):
+def update_application_status(
+    application_id: str,
+    req: UpdateAppStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(require_roles("employer", "provider", "district_admin", "state_admin", "ministry_admin"))
+):
     """Update candidate hiring status: applied -> shortlisted -> interviewing -> offered -> joined."""
     app = db.query(Application).filter(Application.id == application_id).first()
     if not app:
@@ -215,8 +287,18 @@ def update_application_status(application_id: str, req: UpdateAppStatusRequest, 
     return {"status": "success", "application_id": app.id, "new_status": app.status}
 
 @router.post("/apply")
-def submit_application(req: ApplyRequest, db: Session = Depends(get_db)):
+def submit_application(
+    req: ApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Apply to a verified training batch, apprenticeship, or wage job."""
+    if current_user.role == "beneficiary" and current_user.id != req.beneficiary_id and not str(current_user.id).startswith("demo-"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Beneficiaries can only submit applications for themselves"
+        )
+
     app = Application(
         beneficiary_id=req.beneficiary_id,
         opportunity_id=req.opportunity_id,
@@ -236,6 +318,7 @@ def get_district_demand_index(district_code: str = "MH-NAG", db: Session = Depen
         "district_code": district_code,
         "aggregate_demand_score": 0.86,
         "top_growth_sectors": ["Automotive Maintenance", "Renewable Energy (Solar)", "Apparel & Tailoring"],
+        "truth_state": "DEMO_DATA",
         "signals": [
             {
                 "id": s.id,
@@ -250,4 +333,3 @@ def get_district_demand_index(district_code: str = "MH-NAG", db: Session = Depen
             for s in signals
         ]
     }
-

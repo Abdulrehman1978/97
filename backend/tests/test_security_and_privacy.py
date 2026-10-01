@@ -59,13 +59,19 @@ def test_employer_candidate_list_never_leaks_caste():
 
 def test_xss_and_sql_injection_resilience_in_grievance():
     """Verify malicious script payloads in grievance submission do not crash the server and are safely escaped."""
+    from backend.app.shared.security import create_access_token
+    ben_token = create_access_token({"sub": "demo-beneficiary-id", "role": "beneficiary", "name": "Demo User"})
     malicious_payload = {
         "beneficiary_id": "demo-beneficiary-id",
         "category": "training_center",
         "title": "<script>alert('xss')</script> OR '1'='1' --",
         "description": "DROP TABLE beneficiaries; <img src=x onerror=alert(1)>"
     }
-    res = client.post("/api/v1/journey/grievances", json=malicious_payload)
+    res = client.post(
+        "/api/v1/journey/grievances",
+        json=malicious_payload,
+        headers={"Authorization": f"Bearer {ben_token}"}
+    )
     assert res.status_code == 200
     data = res.json()
     assert data["status"] in ["registered", "submitted"]
@@ -103,3 +109,68 @@ def test_admin_can_access_audit_logs():
     res = client.get("/api/v1/admin/audit-logs", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert isinstance(res.json(), list)
+
+def test_anonymous_admin_and_audit_access_denied():
+    """Anonymous access to administrative endpoints must be denied with 401."""
+    assert client.get("/api/v1/admin/dashboard").status_code == 401
+    assert client.get("/api/v1/admin/audit-logs").status_code == 401
+    assert client.get("/api/v1/admin/source-health").status_code == 401
+    assert client.post("/api/v1/admin/batch-planner", json={}).status_code == 401
+
+def test_beneficiary_cross_account_access_denied():
+    """Beneficiary cannot view or edit another beneficiary's private data."""
+    from backend.app.shared.security import create_access_token
+    token = create_access_token({"sub": "legit-ben-1", "role": "beneficiary", "name": "Legit Ben"})
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Accessing someone else's profile
+    res_prof = client.get("/api/v1/beneficiaries/other-ben-99", headers=headers)
+    assert res_prof.status_code == 403
+
+    # Accessing someone else's passport
+    res_pass = client.get("/api/v1/beneficiaries/other-ben-99/passport", headers=headers)
+    assert res_pass.status_code == 403
+
+    # Updating someone else's profile
+    res_edit = client.put("/api/v1/beneficiaries/other-ben-99/profile", json={"aspirations": {"primary_goal": "hack"}}, headers=headers)
+    assert res_edit.status_code == 403
+
+def test_district_cross_jurisdiction_access_denied():
+    """District admin from Pune cannot view Nagpur district dashboard."""
+    from backend.app.shared.security import create_access_token
+    pune_token = create_access_token({"sub": "pune-admin", "role": "district_admin", "district_code": "MH-PUN", "name": "Pune Admin"})
+    headers = {"Authorization": f"Bearer {pune_token}"}
+    
+    res = client.get("/api/v1/admin/dashboard?district_code=MH-NAG", headers=headers)
+    assert res.status_code == 403
+    assert "jurisdiction" in res.json()["detail"].lower()
+
+def test_jwt_tampering_and_expiry_denied():
+    """Invalid, tampered, or expired tokens must fail authentication."""
+    from backend.app.shared.security import create_access_token
+
+    # Completely invalid format
+    res_inv = client.get("/api/v1/identity/me", headers={"Authorization": "Bearer not-a-valid-token"})
+    assert res_inv.status_code == 401
+
+    # Tampered signature
+    valid_token = create_access_token({"sub": "admin-1", "role": "district_admin"})
+    tampered_token = valid_token[:-4] + "abcd"
+    res_tamp = client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {tampered_token}"})
+    assert res_tamp.status_code == 401
+
+    # Expired token (negative delta)
+    expired_token = create_access_token({"sub": "admin-1", "role": "district_admin"}, expires_delta_seconds=-300)
+    res_exp = client.get("/api/v1/identity/me", headers={"Authorization": f"Bearer {expired_token}"})
+    assert res_exp.status_code == 401
+
+def test_production_demo_role_endpoint_guarded():
+    """When DEMO_MODE is False, /api/v1/identity/demo/switch-role must return 404."""
+    from backend.app.config import settings
+    orig_demo = settings.DEMO_MODE
+    try:
+        settings.DEMO_MODE = False
+        res = client.post("/api/v1/identity/demo/switch-role", json={"role": "counsellor"})
+        assert res.status_code == 404
+    finally:
+        settings.DEMO_MODE = orig_demo

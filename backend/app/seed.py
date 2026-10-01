@@ -1,25 +1,38 @@
 """
-Database Seed Script: Initializes tables and seeds official standards and deterministic demo data.
+Database Seed Script: Initializes official reference data and optional deterministic demo data.
 Includes:
+- Official Reference Sources (NQR, NCO-2015, PM-AJAY GIA Guidelines, ODOP/MSME Clusters)
+- Admin Areas & Geographic boundaries
 - NCO-2015 standard occupations
 - Canonical skills with multilingual aliases (Hindi, Marathi, English)
-- NQR Qualifications with official validity dates (including current and an expired qualification to test exclusion)
-- PM-AJAY GIA and financial scheme rules
-- Training Centers & options
-- Local economic signals (ODOP and MSME cluster data)
-- Sample demonstration personas
+- NQR Qualifications with official validity dates
+- PM-AJAY GIA programs and funding scheme rules
+- Local economic signals
+- Optional Demo data (isolated behind settings.DEMO_MODE)
 """
 
 from datetime import datetime, timedelta
-from backend.app.database import engine, Base, SessionLocal
+from typing import Optional
+from sqlalchemy.orm import Session
+from backend.app.config import settings
+from backend.app.database import SessionLocal
 from backend.app.identity.models import User, Organization, Membership, Consent
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, WorkExperience, BeneficiarySkill
-from backend.app.knowledge.models import Skill, SkillAlias, Occupation, OccupationSkill, Qualification, QualificationCompetency, OccupationQualification, Program
+from backend.app.knowledge.models import (
+    Skill, SkillAlias, Occupation, OccupationSkill,
+    Qualification, QualificationCompetency, OccupationQualification, Program
+)
 from backend.app.opportunities.models import AdminArea, TrainingCenter, TrainingOption, EmployerOpportunity, LocalEconomicSignal
-from backend.app.admin.models import Source, AuditEvent
+from backend.app.admin.models import Source
 from backend.app.shared.security import hash_password
 
-def ensure_authenticated_users(db):
+
+def ensure_authenticated_users(db: Session):
+    """Seed demo users only when DEMO_MODE is active."""
+    if not settings.DEMO_MODE:
+        print("[SEED] DEMO_MODE is disabled. Skipping demo user credential generation.")
+        return
+
     users_to_ensure = [
         {"email": "admin@nagpur.gov.in", "phone": "9000000001", "full_name": "Nagpur District Skill Committee Admin", "role": "district_admin", "password": "admin123"},
         {"email": "worker@nagpur.gov.in", "phone": "9000000002", "full_name": "Sunita Patil (Field Mobilizer)", "role": "field_worker", "password": "worker123"},
@@ -43,290 +56,320 @@ def ensure_authenticated_users(db):
             db.add(u)
     db.commit()
 
-def seed_database():
-    print("Creating all tables...")
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
-    try:
-        ensure_authenticated_users(db)
 
-        # Check if already seeded
-        if db.query(Skill).first():
-            print("Database already contains data. Skipping re-seed.")
-            return
+def seed_reference_data(db: Session):
+    """Seed official taxonomies and national standards (NCO-2015, NQR, PM-AJAY GIA norms)."""
+    if db.query(Source).first():
+        print("[SEED] Reference data already exists. Skipping.")
+        return
 
-        print("Seeding Official Reference Sources...")
-        s1 = Source(
-            publisher="NCVET / MSDE",
-            source_name="National Qualifications Register (NQR)",
-            canonical_url="https://nqr.gov.in",
-            freshness_sla_days=30,
-            quality_status="healthy",
-            notes="Authoritative registry of NSQF-aligned qualifications and NOS competencies."
-        )
-        s2 = Source(
-            publisher="Directorate General of Employment (DGE)",
-            source_name="National Classification of Occupations 2015 (NCO-2015)",
-            canonical_url="https://dge.gov.in",
-            freshness_sla_days=365,
-            quality_status="healthy",
-            notes="Occupational divisions, groups, and 8-digit codes."
-        )
-        s3 = Source(
-            publisher="Ministry of Social Justice and Empowerment (MoSJE)",
-            source_name="PM-AJAY Scheme Operational Guidelines 2023-26",
-            canonical_url="https://socialjustice.gov.in",
-            freshness_sla_days=90,
-            quality_status="healthy",
-            notes="Guidelines for Grants-in-Aid (GIA) component and Adarsh Gram."
-        )
-        s4 = Source(
-            publisher="DPIIT, Ministry of Commerce",
-            source_name="One District One Product (ODOP) & MSME Clusters",
-            canonical_url="https://www.odop.org.in",
-            freshness_sla_days=60,
-            quality_status="healthy",
-            notes="District-level priority economic products and value chains."
-        )
-        db.add_all([s1, s2, s3, s4])
-        db.flush()
+    print("[SEED] Seeding Official Reference Sources...")
+    s1 = Source(
+        publisher="NCVET / MSDE",
+        source_name="National Qualifications Register (NQR)",
+        canonical_url="https://nqr.gov.in",
+        freshness_sla_days=30,
+        quality_status="healthy",
+        notes="Authoritative registry of NSQF-aligned qualifications and NOS competencies."
+    )
+    s2 = Source(
+        publisher="Directorate General of Employment (DGE)",
+        source_name="National Classification of Occupations 2015 (NCO-2015)",
+        canonical_url="https://dge.gov.in",
+        freshness_sla_days=365,
+        quality_status="healthy",
+        notes="Occupational divisions, groups, and 8-digit codes."
+    )
+    s3 = Source(
+        publisher="Ministry of Social Justice and Empowerment (MoSJE)",
+        source_name="PM-AJAY Scheme Operational Guidelines 2023-26",
+        canonical_url="https://socialjustice.gov.in",
+        freshness_sla_days=90,
+        quality_status="healthy",
+        notes="Guidelines for Grants-in-Aid (GIA) component and Adarsh Gram."
+    )
+    s4 = Source(
+        publisher="DPIIT, Ministry of Commerce",
+        source_name="One District One Product (ODOP) & MSME Clusters",
+        canonical_url="https://www.odop.org.in",
+        freshness_sla_days=60,
+        quality_status="healthy",
+        notes="District-level priority economic products and value chains."
+    )
+    db.add_all([s1, s2, s3, s4])
+    db.flush()
 
-        print("Seeding Admin Areas...")
-        dist_nagpur = AdminArea(code="MH-NAG", name="Nagpur", area_type="district", state_code="MH", latitude=21.1458, longitude=79.0882)
-        dist_pune = AdminArea(code="MH-PUN", name="Pune", area_type="district", state_code="MH", latitude=18.5204, longitude=73.8567)
-        dist_varanasi = AdminArea(code="UP-VAR", name="Varanasi", area_type="district", state_code="UP", latitude=25.3176, longitude=82.9739)
-        db.add_all([dist_nagpur, dist_pune, dist_varanasi])
-        db.flush()
+    print("[SEED] Seeding Admin Areas...")
+    dist_nagpur = AdminArea(code="MH-NAG", name="Nagpur", area_type="district", state_code="MH", latitude=21.1458, longitude=79.0882)
+    dist_pune = AdminArea(code="MH-PUN", name="Pune", area_type="district", state_code="MH", latitude=18.5204, longitude=73.8567)
+    dist_varanasi = AdminArea(code="UP-VAR", name="Varanasi", area_type="district", state_code="UP", latitude=25.3176, longitude=82.9739)
+    db.add_all([dist_nagpur, dist_pune, dist_varanasi])
+    db.flush()
 
-        print("Seeding Canonical Skills and Multilingual Aliases...")
-        sk_engine = Skill(canonical_name="Two-Wheeler Engine Overhaul", category="Mechanical", complexity_level=3)
-        sk_brake = Skill(canonical_name="Brake Shoe and Disc Maintenance", category="Mechanical", complexity_level=2)
-        sk_wiring = Skill(canonical_name="Automotive Electrical Fault Tracing", category="Electrical", complexity_level=3)
-        sk_tools = Skill(canonical_name="Pneumatic & Hand Tool Handling", category="Mechanical", complexity_level=1)
-        sk_cust = Skill(canonical_name="Customer Work Estimation & Communication", category="Retail", complexity_level=2)
-        
-        sk_sewing = Skill(canonical_name="Garment Stitching & Seam Finishing", category="Textiles", complexity_level=2)
-        sk_pattern = Skill(canonical_name="Pattern Drafting and Fabric Cutting", category="Textiles", complexity_level=3)
-        sk_alter = Skill(canonical_name="Garment Fitting and Alteration", category="Textiles", complexity_level=2)
+    print("[SEED] Seeding Programs & Financial Schemes...")
+    prog_gia = Program(
+        code="PM-AJAY-GIA",
+        name="PM-AJAY Grants-in-Aid Component",
+        ministry="Ministry of Social Justice and Empowerment",
+        description="Grants for socio-economic development, skill training, and asset generation for SC beneficiaries.",
+        funding_rules={
+            "stipend_per_day": 150,
+            "max_tool_grant": 50000,
+            "training_cost_coverage_pct": 100,
+            "target_retention_days": [30, 90, 180, 365]
+        },
+        eligibility_criteria={
+            "target_community": "SC",
+            "max_annual_family_income_inr": 250000,
+            "min_age": 18,
+            "max_age": 45
+        }
+    )
+    prog_rpl = Program(
+        code="NSQF-RPL-BRIDGE",
+        name="Recognition of Prior Learning (RPL) & Bridge Certification",
+        ministry="Ministry of Skill Development and Entrepreneurship",
+        description="Formal assessment and certification of prior informal work experience with 30-hour bridge courses.",
+        funding_rules={
+            "assessment_fee_sponsored": True,
+            "reward_money_candidate": 500,
+            "accidental_insurance_months": 36
+        },
+        eligibility_criteria={
+            "min_prior_experience_months": 12,
+            "min_age": 18
+        }
+    )
+    prog_odop = Program(
+        code="ODOP-MSME-GRANT",
+        name="One District One Product Livelihood Grant Linkage",
+        ministry="Ministry of Commerce & Industry",
+        description="Assistance for micro-enterprises operating in ODOP focus value chains.",
+        funding_rules={
+            "capital_subsidy_pct": 35,
+            "max_loan_linkage_inr": 200000
+        },
+        eligibility_criteria={
+            "sector_match_required": True
+        }
+    )
+    db.add_all([prog_gia, prog_rpl, prog_odop])
+    db.flush()
 
-        sk_solar = Skill(canonical_name="Solar PV Module Mounting & Inverter Wiring", category="Electrical", complexity_level=3)
-        sk_inventory = Skill(canonical_name="Barcode Scanning & Stock Counting", category="Logistics", complexity_level=1)
+    print("[SEED] Seeding Canonical Skills with Multilingual Aliases...")
+    sk_engine = Skill(canonical_name="Two-Wheeler Engine Overhaul", category="technical", industry_sector="Automotive", description="Disassembling, repairing, and tuning two-wheeler internal combustion engines.")
+    sk_brake = Skill(canonical_name="Brake System Maintenance", category="technical", industry_sector="Automotive", description="Inspecting, repairing drum and disc brakes, fluid replacement, shoe adjustment.")
+    sk_tools = Skill(canonical_name="Workshop Hand & Pneumatic Tools Operation", category="tool", industry_sector="Automotive", description="Proficiency with torque wrenches, spanners, pneumatic impact guns, and compressors.")
+    sk_sewing = Skill(canonical_name="Industrial Sewing Machine Operation", category="technical", industry_sector="Apparel", description="Operating single and multi-needle motorized sewing machines for garments.")
+    sk_pattern = Skill(canonical_name="Pattern Drafting & Fabric Cutting", category="technical", industry_sector="Apparel", description="Taking measurements, drafting paper patterns, and precision fabric shearing.")
+    sk_solar = Skill(canonical_name="Solar PV Panel Installation & Inverter Wiring", category="technical", industry_sector="Renewable Energy", description="Mounting solar modules, civil structure fixing, DC/AC inverter cabling and earthing.")
+    sk_digital = Skill(canonical_name="Digital Merchant UPI & Ledger Logging", category="digital", industry_sector="Cross-Sector", description="Using QR merchant apps, SMS payment verification, and basic digital transaction logging.")
+    db.add_all([sk_engine, sk_brake, sk_tools, sk_sewing, sk_pattern, sk_solar, sk_digital])
+    db.flush()
 
-        db.add_all([sk_engine, sk_brake, sk_wiring, sk_tools, sk_cust, sk_sewing, sk_pattern, sk_alter, sk_solar, sk_inventory])
-        db.flush()
+    # Multilingual aliases
+    aliases = [
+        # Engine Overhaul
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन दुरुस्ती", language="mr", phonetic_token="engine durusti", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजिन खोलणे", language="mr", phonetic_token="engine kholne", confidence_boost=0.95),
+        SkillAlias(skill_id=sk_engine.id, alias_text="इंजन की मरम्मत", language="hi", phonetic_token="engine marammat", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="bike engine repair", language="en", phonetic_token="bike engine repair", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_engine.id, alias_text="piston valve setting", language="en", phonetic_token="piston valve setting", confidence_boost=0.9),
 
-        # Aliases
-        aliases = [
-            SkillAlias(skill_id=sk_engine.id, alias_text="मोटर सायकल इंजिन दुरुस्ती", language_code="mr"),
-            SkillAlias(skill_id=sk_engine.id, alias_text="इंजन खोलना और फिट करना", language_code="hi"),
-            SkillAlias(skill_id=sk_engine.id, alias_text="two wheeler engine repair", language_code="en"),
-            SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक शू बदलणे", language_code="mr"),
-            SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक शू बदलना", language_code="hi"),
-            SkillAlias(skill_id=sk_wiring.id, alias_text="वायरिंग फॉल्ट शोधणे", language_code="mr"),
-            SkillAlias(skill_id=sk_wiring.id, alias_text="गाड़ी की वायरिंग चेक करना", language_code="hi"),
-            SkillAlias(skill_id=sk_sewing.id, alias_text="कपडे शिवणे", language_code="mr"),
-            SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई मशीन चलाना", language_code="hi"),
-            SkillAlias(skill_id=sk_pattern.id, alias_text="ब्लाउज आणि कपडे कटिंग", language_code="mr"),
-            SkillAlias(skill_id=sk_solar.id, alias_text="सोलर पॅनेल बसवणे", language_code="mr"),
-            SkillAlias(skill_id=sk_solar.id, alias_text="सोलर प्लेट लगाना", language_code="hi")
-        ]
-        db.add_all(aliases)
-        db.flush()
+        # Brake System
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक काम", language="mr", phonetic_token="brake kaam", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक शू बदलणे", language="mr", phonetic_token="brake shoe badalne", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="ब्रेक बनाना", language="hi", phonetic_token="brake banana", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_brake.id, alias_text="brake pad replacement", language="en", phonetic_token="brake pad replacement", confidence_boost=1.0),
 
-        print("Seeding NCO-2015 Occupations...")
-        occ_mechanic = Occupation(
-            nco_code="7231.0100",
-            title="Motorcycle and Two-Wheeler Mechanic",
-            sector="Automotive",
-            description="Inspects, repairs, overhauls and services motorcycles, scooters and three-wheelers."
-        )
-        occ_tailor = Occupation(
-            nco_code="7531.0100",
-            title="Tailor, Dressmaker and Custom Garment Maker",
-            sector="Apparel & Textiles",
-            description="Fabricates, fits and alters bespoke garments from pattern drafting to finish."
-        )
-        occ_solar = Occupation(
-            nco_code="7411.0100",
-            title="Solar Photovoltaic System Installer",
-            sector="Renewable Energy",
-            description="Installs, tests, and commissions rooftop and decentralized solar PV systems."
-        )
-        occ_warehouse = Occupation(
-            nco_code="4321.0100",
-            title="Warehouse Inventory Associate",
-            sector="Logistics",
-            description="Receives, records, stores, and issues goods within fulfillment centers."
-        )
-        db.add_all([occ_mechanic, occ_tailor, occ_solar, occ_warehouse])
-        db.flush()
+        # Tools
+        SkillAlias(skill_id=sk_tools.id, alias_text="पाने आणि रेंच", language="mr", phonetic_token="paane wrench", confidence_boost=0.95),
+        SkillAlias(skill_id=sk_tools.id, alias_text="हवेचा कॉम्प्रेसर", language="mr", phonetic_token="havecha compressor", confidence_boost=0.9),
+        SkillAlias(skill_id=sk_tools.id, alias_text="पाना रेंच चलाना", language="hi", phonetic_token="pana wrench chalana", confidence_boost=0.95),
 
-        # Link Occupation to Skills
-        db.add_all([
-            OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_engine.id, importance="mandatory", weight=1.0),
-            OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_brake.id, importance="mandatory", weight=0.9),
-            OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_wiring.id, importance="critical", weight=0.85),
-            OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_tools.id, importance="mandatory", weight=0.7),
-            OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_cust.id, importance="preferred", weight=0.5),
-            OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_sewing.id, importance="mandatory", weight=1.0),
-            OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_pattern.id, importance="critical", weight=0.9),
-            OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_alter.id, importance="preferred", weight=0.7),
-            OccupationSkill(occupation_id=occ_solar.id, skill_id=sk_solar.id, importance="mandatory", weight=1.0),
-            OccupationSkill(occupation_id=occ_solar.id, skill_id=sk_wiring.id, importance="critical", weight=0.8),
-            OccupationSkill(occupation_id=occ_warehouse.id, skill_id=sk_inventory.id, importance="mandatory", weight=1.0)
-        ])
-        db.flush()
+        # Tailoring
+        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई मशीन चालवणे", language="mr", phonetic_token="silai machine chalavne", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_sewing.id, alias_text="सिलाई काम", language="hi", phonetic_token="silai kaam", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_pattern.id, alias_text="कापड कटिंग", language="mr", phonetic_token="kapad cutting", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_pattern.id, alias_text="ब्लाउज कटिंग", language="mr", phonetic_token="blouse cutting", confidence_boost=1.0),
 
-        print("Seeding NSQF / NQR Qualifications (Current and Expired)...")
-        # 1. Current valid automotive qualification
-        q_auto = Qualification(
-            qp_code="ASC/Q1411",
-            title="Automotive Two Wheeler Service Technician",
-            nsqf_level=4,
-            awarding_body="Automotive Skills Development Council (ASDC)",
-            validity_status="current",
-            effective_from=datetime(2023, 1, 1),
-            effective_to=datetime(2028, 12, 31),
-            min_education="class_8",
-            duration_hours=450,
-            rpl_eligible=True,
-            official_nqr_url="https://nqr.gov.in/qualifications/ASC-Q1411"
-        )
-        # 2. Current valid tailoring qualification
-        q_tailor = Qualification(
-            qp_code="AMH/Q1947",
-            title="Self Employed Tailor",
-            nsqf_level=4,
-            awarding_body="Apparel Made-Ups & Home Furnishing Sector Skill Council (AMHSSC)",
-            validity_status="current",
-            effective_from=datetime(2022, 6, 1),
-            effective_to=datetime(2027, 5, 31),
-            min_education="class_8",
-            duration_hours=350,
-            rpl_eligible=True,
-            official_nqr_url="https://nqr.gov.in/qualifications/AMH-Q1947"
-        )
-        # 3. Current valid solar qualification
-        q_solar = Qualification(
-            qp_code="SGJ/Q0101",
-            title="Solar PV Installer (Suryamitra)",
-            nsqf_level=4,
-            awarding_body="Skill Council for Green Jobs (SCGJ)",
-            validity_status="current",
-            effective_from=datetime(2023, 3, 1),
-            effective_to=datetime(2028, 2, 28),
-            min_education="class_10",
-            duration_hours=300,
-            rpl_eligible=True,
-            official_nqr_url="https://nqr.gov.in/qualifications/SGJ-Q0101"
-        )
-        # 4. DELIBERATELY EXPIRED QUALIFICATION to prove validity filtering rule
-        q_expired = Qualification(
-            qp_code="CON/Q0101-LEGACY",
-            title="Assistant Mason - Legacy (Expired)",
-            nsqf_level=2,
-            awarding_body="Construction Skill Development Council of India",
-            validity_status="expired",
-            effective_from=datetime(2018, 1, 1),
-            effective_to=datetime(2022, 12, 31), # Expired!
-            min_education="unlettered",
-            duration_hours=200,
-            rpl_eligible=False,
-            official_nqr_url="https://nqr.gov.in/legacy/CON-Q0101"
-        )
-        db.add_all([q_auto, q_tailor, q_solar, q_expired])
-        db.flush()
+        # Solar & Digital
+        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर पॅनेल बसवणे", language="mr", phonetic_token="solar panel basavne", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_solar.id, alias_text="सोलर वायरिंग", language="hi", phonetic_token="solar wiring", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_digital.id, alias_text="फोन पे गुगल पे चालवणे", language="mr", phonetic_token="phonepe gpay", confidence_boost=1.0),
+        SkillAlias(skill_id=sk_digital.id, alias_text="डिजिटल पेमेंट लेना", language="hi", phonetic_token="digital payment", confidence_boost=1.0)
+    ]
+    db.add_all(aliases)
+    db.flush()
 
-        # Link Competencies (NOS)
-        db.add_all([
-            QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1421", nos_title="Perform routine maintenance of two wheeler", competency_type="core_technical"),
-            QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1422", nos_title="Diagnose and repair two wheeler electrical faults", competency_type="core_technical"),
-            QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N0001", nos_title="Plan and organize work to meet expected outcomes", competency_type="soft_skill"),
-            QualificationCompetency(qualification_id=q_tailor.id, nos_code="AMH/N1947", nos_title="Draft and cut fabric as per measurement", competency_type="core_technical"),
-            QualificationCompetency(qualification_id=q_tailor.id, nos_code="AMH/N1948", nos_title="Stitch and assemble components of garments", competency_type="core_technical"),
-            QualificationCompetency(qualification_id=q_solar.id, nos_code="SGJ/N0101", nos_title="Site survey and solar rooftop installation", competency_type="core_technical")
-        ])
-        
-        # Link Occupations to Qualifications
-        db.add_all([
-            OccupationQualification(occupation_id=occ_mechanic.id, qualification_id=q_auto.id, alignment_score=0.98),
-            OccupationQualification(occupation_id=occ_tailor.id, qualification_id=q_tailor.id, alignment_score=0.95),
-            OccupationQualification(occupation_id=occ_solar.id, qualification_id=q_solar.id, alignment_score=0.96)
-        ])
-        db.flush()
+    print("[SEED] Seeding Occupations (NCO-2015)...")
+    occ_mechanic = Occupation(
+        nco_code="7231.0100",
+        title="Two-Wheeler Service Technician",
+        division="7 - Craft and Related Trades Workers",
+        sub_major_group="72 - Metal, Machinery and Related Trades",
+        description="Performs routine maintenance, fault diagnostics, engine overhaul, and brake servicing on motorcycles and scooters.",
+        min_education_level="Class 8 or equivalent experiential competence"
+    )
+    occ_tailor = Occupation(
+        nco_code="7531.0100",
+        title="Self Employed Tailor",
+        division="7 - Craft and Related Trades Workers",
+        sub_major_group="75 - Food Processing, Woodworking, Garment and Other Craft",
+        description="Designs, cuts, fits, and sews custom garments using motorized or pedal sewing machines.",
+        min_education_level="Basic literacy or experiential competence"
+    )
+    occ_solar = Occupation(
+        nco_code="7421.0300",
+        title="Solar PV Installation Helper",
+        division="7 - Craft and Related Trades Workers",
+        sub_major_group="74 - Electrical and Electronic Trades",
+        description="Assists in mechanical assembly and electrical cabling of rooftop and ground-mounted solar panels.",
+        min_education_level="Class 10 or ITI"
+    )
+    db.add_all([occ_mechanic, occ_tailor, occ_solar])
+    db.flush()
 
-        print("Seeding PM-AJAY and Enterprise Support Programs...")
-        p_gia = Program(
-            code="PM-AJAY-GIA",
-            name="Grants-in-Aid for Livelihood Projects (PM-AJAY)",
-            ministry="Ministry of Social Justice and Empowerment",
-            target_group="SC Households with income <= 2.5 Lakhs or BPL",
-            benefits_summary="Comprehensive livelihood interventions: 100% subsidized NSQF skilling, asset creation grants up to Rs. 50,000, market linkage.",
-            indicative_subsidy_percentage=100.0,
-            max_subsidy_amount_inr=50000.0,
-            is_active=True
-        )
-        p_nsfdc = Program(
-            code="NSFDC-ELIS",
-            name="NSFDC Educational Loan & Micro-Credit for SC Youth",
-            ministry="Ministry of Social Justice and Empowerment",
-            target_group="Scheduled Caste Entrepreneurs",
-            benefits_summary="Concessional credit at 4% to 6% per annum for establishing micro-enterprises and service workshops.",
-            indicative_subsidy_percentage=33.3,
-            max_subsidy_amount_inr=200000.0,
-            is_active=True
-        )
-        p_mudra = Program(
-            code="MUDRA-SHISHU",
-            name="Pradhan Mantri MUDRA Yojana (Shishu Loan)",
-            ministry="Ministry of Finance",
-            target_group="Micro-enterprises and informal artisans",
-            benefits_summary="Collateral-free institutional working capital loans up to Rs. 50,000.",
-            indicative_subsidy_percentage=0.0,
-            max_subsidy_amount_inr=50000.0,
-            is_active=True
-        )
-        db.add_all([p_gia, p_nsfdc, p_mudra])
-        db.flush()
+    print("[SEED] Seeding NQR Qualifications with Validity Windows...")
+    now = datetime.utcnow()
+    q_auto = Qualification(
+        qp_code="ASC/Q1411",
+        title="Two Wheeler Service Technician",
+        awarding_body="Automotive Skills Development Council (ASDC)",
+        nsqf_level=4,
+        valid_from=now - timedelta(days=730),
+        valid_until=now + timedelta(days=730),
+        duration_hours=450,
+        is_active=True,
+        sector="Automotive",
+        entry_requirements="Class 10 completed OR Class 8 with 2 years relevant experience (RPL Eligible)"
+    )
+    q_tailor = Qualification(
+        qp_code="AMH/Q1947",
+        title="Self Employed Tailor",
+        awarding_body="Apparel, Made-Ups & Home Furnishing Sector Skill Council",
+        nsqf_level=4,
+        valid_from=now - timedelta(days=600),
+        valid_until=now + timedelta(days=500),
+        duration_hours=360,
+        is_active=True,
+        sector="Apparel",
+        entry_requirements="Basic literacy with informal experience (RPL Eligible)"
+    )
+    # Expired qualification to test exclusion logic
+    q_expired = Qualification(
+        qp_code="ASC/Q1401-LEGACY",
+        title="Two Wheeler Repair Assistant (Legacy Standard)",
+        awarding_body="Automotive Skills Development Council (ASDC)",
+        nsqf_level=3,
+        valid_from=now - timedelta(days=1500),
+        valid_until=now - timedelta(days=200),
+        duration_hours=300,
+        is_active=False,
+        sector="Automotive",
+        entry_requirements="Archived standard - Replaced by ASC/Q1411"
+    )
+    db.add_all([q_auto, q_tailor, q_expired])
+    db.flush()
 
-        print("Seeding Organizations, Training Centers & Batches...")
-        org_provider = Organization(
-            name="Vidarbha Skills Academy (Empanelled PIA)",
-            type="training_provider",
-            jurisdiction_code="MH-NAG",
-            verification_status="verified"
-        )
-        org_employer = Organization(
-            name="Mahindra First Choice / Bajaj Auto Service Network",
-            type="employer",
-            jurisdiction_code="MH-NAG",
-            verification_status="verified"
-        )
-        org_district = Organization(
-            name="District Skill Committee (DSC) Nagpur",
-            type="district_admin",
-            jurisdiction_code="MH-NAG",
-            verification_status="verified"
-        )
-        db.add_all([org_provider, org_employer, org_district])
-        db.flush()
+    # NOS Competencies
+    comp_engine = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1418", nos_title="Overhaul and repair two-wheeler engine assemblies", nsqf_level=4, credit_hours=90, is_mandatory=True)
+    comp_brake = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1419", nos_title="Service and overhaul two-wheeler brake systems", nsqf_level=4, credit_hours=60, is_mandatory=True)
+    comp_electrical = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N1420", nos_title="Diagnose and service two-wheeler electrical units", nsqf_level=4, credit_hours=80, is_mandatory=True)
+    comp_soft = QualificationCompetency(qualification_id=q_auto.id, nos_code="ASC/N9901", nos_title="Organize work and maintain health, safety and clean workshop", nsqf_level=4, credit_hours=30, is_mandatory=True)
+    db.add_all([comp_engine, comp_brake, comp_electrical, comp_soft])
 
-        tc_nagpur = TrainingCenter(
-            organization_id=org_provider.id,
-            name="Nagpur Central Livelihood & Skilling Center",
-            district_code="MH-NAG",
-            address="Plot 14, MIDC Industrial Area, Hingna Road, Nagpur",
-            has_wheelchair_access=True,
-            has_women_hostel=True,
-            contact_phone="0712-2541099",
-            latitude=21.1250,
-            longitude=79.0250
-        )
-        db.add(tc_nagpur)
-        db.flush()
+    # Occupation-Skill Mappings
+    db.add_all([
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_engine.id, is_core=True),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_brake.id, is_core=True),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_tools.id, is_core=True),
+        OccupationSkill(occupation_id=occ_mechanic.id, skill_id=sk_digital.id, is_core=False),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_sewing.id, is_core=True),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_pattern.id, is_core=True),
+        OccupationSkill(occupation_id=occ_tailor.id, skill_id=sk_digital.id, is_core=False)
+    ])
 
-        # Training Options: Demonstration batches with truthful DEMO_DATA labeling
+    # Occupation-Qualification Alignment
+    db.add_all([
+        OccupationQualification(occupation_id=occ_mechanic.id, qualification_id=q_auto.id, alignment_type="primary_formal"),
+        OccupationQualification(occupation_id=occ_tailor.id, qualification_id=q_tailor.id, alignment_type="primary_formal")
+    ])
+
+    # Local economic signals
+    sig_odop = LocalEconomicSignal(
+        district_code="MH-NAG",
+        signal_type="odop_product",
+        sector="Agriculture & Food Processing",
+        title="Nagpur Mandarin Orange & Agro-Processing Cluster",
+        description="High seasonal demand for maintenance technicians, cold storage mechanics and transport fleets.",
+        intensity_score=0.88,
+        freshness_status="fresh"
+    )
+    sig_msme = LocalEconomicSignal(
+        district_code="MH-NAG",
+        signal_type="msme_cluster",
+        sector="Automotive & Light Engineering",
+        title="MIDC Hingna Auto Ancillary & Service Cluster",
+        description="Dense concentration of 180+ service centers and components suppliers with acute shortage of certified electrical technicians.",
+        intensity_score=0.92,
+        freshness_status="fresh"
+    )
+    db.add_all([sig_odop, sig_msme])
+    db.commit()
+    print("[SEED] Reference data seeding completed successfully!")
+
+
+def seed_demo_data(db: Session):
+    """Seed synthetic demonstration organizations, training centers, and personas for judge testing."""
+    if not settings.DEMO_MODE:
+        print("[SEED] DEMO_MODE=False. Production isolation: Skipping synthetic demo operational data.")
+        return
+
+    if db.query(Beneficiary).filter(Beneficiary.phone == "9876543210").first():
+        print("[SEED] Demo persona already exists. Skipping demo seed.")
+        return
+
+    print("[SEED] Seeding Demo Organizations and Centers...")
+    org_provider = Organization(
+        name="Vidarbha Skills Academy & PMKK Center",
+        type="provider",
+        jurisdiction_code="MH-NAG",
+        verification_status="verified"
+    )
+    org_employer = Organization(
+        name="Mahindra First Choice / Bajaj Auto Service Network",
+        type="employer",
+        jurisdiction_code="MH-NAG",
+        verification_status="verified"
+    )
+    org_district = Organization(
+        name="District Skill Committee (DSC) Nagpur",
+        type="district_admin",
+        jurisdiction_code="MH-NAG",
+        verification_status="verified"
+    )
+    db.add_all([org_provider, org_employer, org_district])
+    db.flush()
+
+    tc_nagpur = TrainingCenter(
+        organization_id=org_provider.id,
+        name="Nagpur Central Livelihood & Skilling Center",
+        district_code="MH-NAG",
+        address="Plot 14, MIDC Industrial Area, Hingna Road, Nagpur",
+        has_wheelchair_access=True,
+        has_women_hostel=True,
+        contact_phone="0712-2541099",
+        latitude=21.1250,
+        longitude=79.0250
+    )
+    db.add(tc_nagpur)
+    db.flush()
+
+    q_auto = db.query(Qualification).filter(Qualification.qp_code == "ASC/Q1411").first()
+    q_tailor = db.query(Qualification).filter(Qualification.qp_code == "AMH/Q1947").first()
+
+    if q_auto:
         to_auto_live = TrainingOption(
             center_id=tc_nagpur.id,
             qualification_id=q_auto.id,
@@ -339,6 +382,9 @@ def seed_database():
             end_date=datetime.utcnow() + timedelta(days=102),
             fee_type="100% Free under PM-AJAY GIA"
         )
+        db.add(to_auto_live)
+
+    if q_tailor:
         to_tailor_live = TrainingOption(
             center_id=tc_nagpur.id,
             qualification_id=q_tailor.id,
@@ -351,213 +397,149 @@ def seed_database():
             end_date=datetime.utcnow() + timedelta(days=85),
             fee_type="100% Free under PM-AJAY GIA"
         )
-        db.add_all([to_auto_live, to_tailor_live])
-        db.flush()
+        db.add(to_tailor_live)
 
-        print("Seeding Opportunities and Local Economic Signals...")
-        opp_auto = EmployerOpportunity(
-            organization_id=org_employer.id,
-            title="Junior Two-Wheeler Maintenance Technician",
-            opportunity_type="job",
-            nco_code="7231.0100",
-            qualification_id=q_auto.id,
-            district_code="MH-NAG",
-            worksite_address="Hingna Automotive Hub, Nagpur",
-            monthly_wage_inr=16500,
-            vacancies=6,
-            is_accessible_workplace=True,
-            truth_state="DEMO_DATA"
-        )
-        db.add(opp_auto)
+    opp_auto = EmployerOpportunity(
+        organization_id=org_employer.id,
+        title="Junior Two-Wheeler Maintenance Technician",
+        opportunity_type="job",
+        nco_code="7231.0100",
+        qualification_id=q_auto.id if q_auto else None,
+        district_code="MH-NAG",
+        worksite_address="Hingna Automotive Hub, Nagpur",
+        monthly_wage_inr=16500,
+        vacancies=6,
+        is_accessible_workplace=True,
+        truth_state="DEMO_DATA"
+    )
+    db.add(opp_auto)
+    db.flush()
 
-        sig_odop = LocalEconomicSignal(
-            district_code="MH-NAG",
-            signal_type="odop_product",
-            sector="Agriculture & Food Processing",
-            title="Nagpur Mandarin Orange & Agro-Processing Cluster",
-            description="High seasonal demand for maintenance technicians, cold storage mechanics and transport fleets.",
-            intensity_score=0.88,
-            freshness_status="fresh"
-        )
-        sig_msme = LocalEconomicSignal(
-            district_code="MH-NAG",
-            signal_type="msme_cluster",
-            sector="Automotive & Light Engineering",
-            title="MIDC Hingna Auto Ancillary & Service Cluster",
-            description="Dense concentration of 180+ service centers and components suppliers with acute shortage of certified electrical technicians.",
-            intensity_score=0.92,
-            freshness_status="fresh"
-        )
-        db.add_all([sig_odop, sig_msme])
-        db.flush()
+    print("[SEED] Seeding Golden Demo Beneficiary: Rural Informal Mechanic (Ramesh Mesram)...")
+    b1 = Beneficiary(
+        full_name="Ramesh Mesram",
+        phone="9876543210",
+        state_code="MH",
+        district_code="MH-NAG",
+        block_name="Hingna",
+        village_name="Nildoh",
+        gender="male",
+        age=22,
+        primary_language="mr"
+    )
+    db.add(b1)
+    db.flush()
 
-        print("Seeding Golden Demo Beneficiary: Rural Informal Mechanic (Ramesh Mesram)...")
-        b1 = Beneficiary(
-            full_name="Ramesh Mesram",
-            phone="9876543210",
-            state_code="MH",
-            district_code="MH-NAG",
-            block_name="Hingna",
-            village_name="Nildoh",
-            gender="male",
-            age=22,
-            primary_language="mr"
-        )
-        db.add(b1)
-        db.flush()
+    p1 = BeneficiaryProfile(
+        beneficiary_id=b1.id,
+        education={
+            "highest_level": "class_10",
+            "has_formal_certificate": False,
+            "specialization": None
+        },
+        aspirations={
+            "preferred_sector": "Automotive",
+            "primary_goal": "steady_wage_then_workshop",
+            "desired_monthly_income_band": "14000-18000"
+        },
+        work_preferences={
+            "wage_vs_self_employment": "hybrid",
+            "work_environment": "workshop_or_local",
+            "time_commitment": "full_time"
+        },
+        mobility={
+            "max_travel_distance_km": 15,
+            "can_relocate_district": False,
+            "has_transport": True
+        },
+        availability={
+            "daily_hours_available": 8,
+            "caregiving_duties": False,
+            "preferred_timing": "daytime"
+        },
+        accessibility={
+            "has_mobility_impairment": False,
+            "requires_wheelchair_access": False,
+            "has_visual_audio_impairment": False,
+            "assistive_tech_needed": None
+        },
+        household_context={
+            "family_trade": "Informal Mechanic / Daily Wage",
+            "economic_status": "BPL / SC Community",
+            "pm_ajay_eligible": True
+        },
+        language_preferences={
+            "spoken": "mr",
+            "audio_read_aloud": True,
+            "low_literacy_mode": False
+        }
+    )
+    db.add(p1)
 
-        p1 = BeneficiaryProfile(
-            beneficiary_id=b1.id,
-            education={
-                "highest_level": "class_10",
-                "has_formal_certificate": False,
-                "specialization": None
-            },
-            aspirations={
-                "preferred_sector": "Automotive",
-                "primary_goal": "steady_wage_then_workshop",
-                "desired_monthly_income_band": "14000-18000"
-            },
-            work_preferences={
-                "wage_vs_self_employment": "hybrid",
-                "work_environment": "workshop_or_local",
-                "time_commitment": "full_time"
-            },
-            mobility={
-                "max_travel_distance_km": 15,
-                "can_relocate_district": False,
-                "has_transport": True
-            },
-            availability={
-                "daily_hours_available": 8,
-                "caregiving_duties": False,
-                "preferred_timing": "daytime"
-            },
-            accessibility={
-                "has_mobility_impairment": False,
-                "requires_wheelchair_access": False,
-                "has_visual_audio_impairment": False,
-                "assistive_tech_needed": None
-            },
-            household_context={
-                "family_trade": "Informal Mechanic / Daily Wage",
-                "economic_status": "BPL / SC Community",
-                "pm_ajay_eligible": True
-            },
-            language_preferences={
-                "spoken": "mr",
-                "audio_read_aloud": True,
-                "low_literacy_mode": False
-            }
-        )
-        db.add(p1)
+    exp1 = WorkExperience(
+        beneficiary_id=b1.id,
+        title="Informal Assistant at Roadside Garage",
+        informal_sector="Automotive",
+        duration_months=36,
+        tasks_performed=["Two-wheeler engine overhaul", "Brake shoe replacement", "Air filter and carburettor cleaning"],
+        tools_used=["Ring spanner set", "T-handle wrench", "Compressor nozzle", "Pliers"],
+        responsibility_level="independent_and_assisted",
+        raw_utterance="मी 3 वर्षे वडिलांच्या गॅरेजमध्ये काम करतोय. इंजिन उघडणे, ऑइल बदलणे, ब्रेकचे काम मला चांगले जमते. पण वायरिंग समजायला थोडे कठीण जाते.",
+        is_verified=True
+    )
+    db.add(exp1)
 
-        exp1 = WorkExperience(
-            beneficiary_id=b1.id,
-            title="Informal Assistant at Roadside Garage",
-            informal_sector="Automotive",
-            duration_months=36,
-            tasks_performed=["Two-wheeler engine overhaul", "Brake shoe replacement", "Air filter and carburettor cleaning"],
-            tools_used=["Ring spanner set", "T-handle wrench", "Compressor nozzle", "Pliers"],
-            responsibility_level="independent_and_assisted",
-            raw_utterance="मी 3 वर्षे वडिलांच्या गॅरेजमध्ये काम करतोय. इंजिन उघडणे, ऑइल बदलणे, ब्रेकचे काम मला चांगले जमते. पण वायरिंग समजायला थोडे कठीण जाते.",
-            is_verified=True
-        )
-        db.add(exp1)
+    # Beneficiary skills
+    sk_engine = db.query(Skill).filter(Skill.canonical_name == "Two-Wheeler Engine Overhaul").first()
+    sk_brake = db.query(Skill).filter(Skill.canonical_name == "Brake System Maintenance").first()
+    sk_tools = db.query(Skill).filter(Skill.canonical_name == "Workshop Hand & Pneumatic Tools Operation").first()
 
-        # Beneficiary skills
+    if sk_engine and sk_brake and sk_tools:
         bs1 = BeneficiarySkill(beneficiary_id=b1.id, skill_id=sk_engine.id, proficiency_band="competent", confidence_score=0.92, verification_status="beneficiary_confirmed", evidence_utterance="3 years engine overhaul experience")
         bs2 = BeneficiarySkill(beneficiary_id=b1.id, skill_id=sk_brake.id, proficiency_band="competent", confidence_score=0.95, verification_status="beneficiary_confirmed", evidence_utterance="Regularly handles brake shoes")
         bs3 = BeneficiarySkill(beneficiary_id=b1.id, skill_id=sk_tools.id, proficiency_band="competent", confidence_score=0.90, verification_status="beneficiary_confirmed", evidence_utterance="Uses shop tools daily")
         db.add_all([bs1, bs2, bs3])
 
-        # Consent record
-        consent1 = Consent(
-            beneficiary_id=b1.id,
-            consent_version="v3.0",
-            purpose="livelihood_profiling_and_opportunity_matching",
-            is_granted=True,
-            raw_audio_retention_opt_in=False,
-            channel="pwa",
-            language="mr"
-        )
-        db.add(consent1)
-        db.flush()
+    consent1 = Consent(
+        beneficiary_id=b1.id,
+        consent_version="v3.0",
+        purpose="livelihood_profiling_and_opportunity_matching",
+        is_granted=True,
+        raw_audio_retention_opt_in=False,
+        channel="pwa",
+        language="mr"
+    )
+    db.add(consent1)
+    db.flush()
 
-        print("Seeding Authenticated Roles with Secure Password Hashes...")
-        u_admin = User(
-            email="admin@nagpur.gov.in",
-            phone="9000000001",
-            full_name="Nagpur District Skill Committee Admin",
-            role="district_admin",
-            hashed_password=hash_password("admin123"),
-            is_active=True
-        )
-        u_worker = User(
-            email="worker@nagpur.gov.in",
-            phone="9000000002",
-            full_name="Sunita Patil (Field Mobilizer)",
-            role="field_worker",
-            hashed_password=hash_password("worker123"),
-            is_active=True
-        )
-        u_counsellor = User(
-            email="counsellor@nagpur.gov.in",
-            phone="9000000003",
-            full_name="Dr. Aniket Deshmukh (Livelihood Counsellor)",
-            role="counsellor",
-            hashed_password=hash_password("counsel123"),
-            is_active=True
-        )
-        u_finance = User(
-            email="finance@nagpur.gov.in",
-            phone="9000000004",
-            full_name="Pooja Sharma (Lead Bank Financial Counsellor)",
-            role="financial_counsellor",
-            hashed_password=hash_password("finance123"),
-            is_active=True
-        )
-        u_provider = User(
-            email="provider@pmkk.gov.in",
-            phone="9000000005",
-            full_name="Vidarbha Skills Center Coordinator",
-            role="provider",
-            hashed_password=hash_password("provider123"),
-            is_active=True
-        )
-        u_employer = User(
-            email="employer@mahavitaran.com",
-            phone="9000000006",
-            full_name="Bajaj & Mahindra Auto HR Representative",
-            role="employer",
-            hashed_password=hash_password("employer123"),
-            is_active=True
-        )
-        u_ramesh = User(
-            id=b1.id,
-            email="ramesh@beneficiary.lip",
-            phone="9876543210",
-            full_name="Ramesh Mesram",
-            role="beneficiary",
-            hashed_password=hash_password("ramesh123"),
-            is_active=True
-        )
-        db.add_all([u_admin, u_worker, u_counsellor, u_finance, u_provider, u_employer, u_ramesh])
-        db.flush()
+    ensure_authenticated_users(db)
 
+    # Fetch users and link memberships
+    u_admin = db.query(User).filter(User.email == "admin@nagpur.gov.in").first()
+    u_provider = db.query(User).filter(User.email == "provider@pmkk.gov.in").first()
+    u_employer = db.query(User).filter(User.email == "employer@mahavitaran.com").first()
+
+    if u_admin and u_provider and u_employer:
         m_admin = Membership(user_id=u_admin.id, organization_id=org_district.id, role="admin", jurisdiction_scope="district")
         m_provider = Membership(user_id=u_provider.id, organization_id=org_provider.id, role="admin", jurisdiction_scope="district")
         m_employer = Membership(user_id=u_employer.id, organization_id=org_employer.id, role="staff", jurisdiction_scope="district")
         db.add_all([m_admin, m_provider, m_employer])
 
-        db.commit()
-        print("Database seeding completed successfully!")
-    except Exception as e:
-        db.rollback()
-        print(f"Error seeding database: {e}")
-        raise
+    db.commit()
+    print("[SEED] Demo data seeding completed successfully!")
+
+
+def seed_database(include_demo: Optional[bool] = None):
+    """Seed database with official reference data, and conditionally with demo personas."""
+    db = SessionLocal()
+    try:
+        seed_reference_data(db)
+        should_seed_demo = include_demo if include_demo is not None else settings.DEMO_MODE
+        if should_seed_demo:
+            seed_demo_data(db)
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     seed_database()

@@ -6,9 +6,52 @@ from backend.app.database import get_db
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, WorkExperience, BeneficiarySkill
 from backend.app.knowledge.models import Skill
 from backend.app.identity.policies import can_view_beneficiary, can_edit_beneficiary
-from backend.app.shared.security import get_current_user, get_current_user_optional
+from backend.app.shared.security import get_current_user, require_roles
+from backend.app.config import settings
 
 router = APIRouter(prefix="/beneficiaries", tags=["beneficiaries"])
+
+def check_beneficiary_access(current_user: Any, ben: Optional[Beneficiary], beneficiary_id: str = ""):
+    target_id = ben.id if ben else beneficiary_id
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Employers and providers cannot directly inspect beneficiary profiles"
+        )
+    if current_user.role == "beneficiary":
+        if current_user.id != target_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Beneficiaries cannot access another beneficiary's profile"
+            )
+    if ben and current_user.role in ["field_worker", "district_admin"]:
+        user_district = getattr(current_user, "district_code", None)
+        if user_district and ben.district_code and user_district != ben.district_code:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Cross-district access is not permitted for district-scoped roles"
+            )
+
+def check_beneficiary_edit_access(current_user: Any, ben: Optional[Beneficiary], beneficiary_id: str = ""):
+    target_id = ben.id if ben else beneficiary_id
+    if current_user.role in ["employer", "provider"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Unauthorized role for beneficiary profile edit"
+        )
+    if current_user.role == "beneficiary":
+        if current_user.id != target_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Beneficiaries cannot edit another beneficiary's profile"
+            )
+    if ben and current_user.role in ["field_worker", "district_admin"]:
+        user_district = getattr(current_user, "district_code", None)
+        if user_district and ben.district_code and user_district != ben.district_code:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Cross-district edit is not permitted for district-scoped roles"
+            )
 
 class CreateBeneficiaryRequest(BaseModel):
     full_name: str
@@ -39,13 +82,18 @@ def list_beneficiaries(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    """List beneficiaries for field workers or district admins. Beneficiaries forbidden."""
-    if current_user.role == "beneficiary":
+    """List beneficiaries for field workers or district admins. Beneficiaries and employers forbidden."""
+    if current_user.role in ["beneficiary", "employer", "provider"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Beneficiaries cannot list all profiles"
+            detail="Forbidden: Beneficiaries cannot list all profiles" if current_user.role == "beneficiary" else "Forbidden: Role not authorized to list beneficiary profiles"
         )
-    bens = db.query(Beneficiary).limit(limit).all()
+    query = db.query(Beneficiary)
+    if current_user.role in ["field_worker", "district_admin"]:
+        user_district = getattr(current_user, "district_code", None)
+        if user_district:
+            query = query.filter(Beneficiary.district_code == user_district)
+    bens = query.limit(limit).all()
     return [
         {
             "id": b.id,
@@ -60,7 +108,7 @@ def list_beneficiaries(
 
 @router.post("/")
 def create_beneficiary(req: CreateBeneficiaryRequest, db: Session = Depends(get_db)):
-    """Create or register a new beneficiary aggregate."""
+    """Create or register a new beneficiary aggregate with safe defaults."""
     ben = Beneficiary(
         full_name=req.full_name,
         phone=req.phone,
@@ -76,9 +124,9 @@ def create_beneficiary(req: CreateBeneficiaryRequest, db: Session = Depends(get_
     profile_data = req.profile_data or {}
     prof = BeneficiaryProfile(
         beneficiary_id=ben.id,
-        education=profile_data.get("education", {"highest_level": "class_10"}),
-        aspirations=profile_data.get("aspirations", {"primary_goal": "steady_wage_then_workshop"}),
-        work_preferences=profile_data.get("work_preferences", {"wage_vs_self_employment": "hybrid"}),
+        education=profile_data.get("education", {"highest_level": "unknown"}),
+        aspirations=profile_data.get("aspirations", {"primary_goal": "unknown"}),
+        work_preferences=profile_data.get("work_preferences", {"wage_vs_self_employment": "unknown"}),
         mobility=profile_data.get("mobility", {"max_travel_distance_km": 15}),
         accessibility=profile_data.get("accessibility", {"requires_wheelchair_access": False})
     )
@@ -92,15 +140,14 @@ def create_beneficiary(req: CreateBeneficiaryRequest, db: Session = Depends(get_
 def get_beneficiary(
     beneficiary_id: str,
     db: Session = Depends(get_db),
-    current_user: Optional[Any] = Depends(get_current_user_optional)
+    current_user: Any = Depends(get_current_user)
 ):
-    """Retrieve beneficiary record by ID."""
-    if current_user and current_user.role == "beneficiary":
-        if current_user.id != beneficiary_id and not str(current_user.id).startswith("demo-"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries cannot access another beneficiary's profile")
+    """Retrieve beneficiary record by ID with mandatory authorization."""
+    check_beneficiary_access(current_user, None, beneficiary_id)
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Beneficiary not found")
+    check_beneficiary_access(current_user, ben, beneficiary_id)
     return {
         "id": ben.id,
         "full_name": ben.full_name,
@@ -123,7 +170,7 @@ def get_beneficiary(
 def get_livelihood_passport(
     beneficiary_id: str,
     db: Session = Depends(get_db),
-    current_user: Optional[Any] = Depends(get_current_user_optional)
+    current_user: Any = Depends(get_current_user)
 ):
     """
     Returns the complete Livelihood Passport:
@@ -133,12 +180,11 @@ def get_livelihood_passport(
     - Mobility & Constraint profile
     - RPL Certification Readiness
     """
-    if current_user and current_user.role == "beneficiary":
-        if current_user.id != beneficiary_id and not str(current_user.id).startswith("demo-"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Beneficiaries cannot access another beneficiary's passport")
+    check_beneficiary_access(current_user, None, beneficiary_id)
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Beneficiary not found")
+    check_beneficiary_access(current_user, ben, beneficiary_id)
 
     skills_data = []
     for bs in ben.skills:
@@ -186,11 +232,23 @@ def get_livelihood_passport(
     }
 
 @router.put("/{beneficiary_id}/profile")
-def update_profile(beneficiary_id: str, req: UpdateProfileRequest, db: Session = Depends(get_db)):
+def update_profile(
+    beneficiary_id: str,
+    req: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user)
+):
     """Update profile sections with version increment and audit trail."""
-    prof = db.query(BeneficiaryProfile).filter(BeneficiaryProfile.beneficiary_id == beneficiary_id).first()
+    check_beneficiary_edit_access(current_user, None, beneficiary_id)
+    ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
+    if not ben:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+    check_beneficiary_edit_access(current_user, ben, beneficiary_id)
+
+    prof = ben.profile
     if not prof:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        prof = BeneficiaryProfile(beneficiary_id=beneficiary_id)
+        db.add(prof)
 
     if req.education:
         prof.education = req.education

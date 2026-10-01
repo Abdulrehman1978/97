@@ -173,6 +173,7 @@ export function LivingPathway({ pathway, onSelect, showCounterfactual = true }: 
           </div>
           <input
             type="range"
+            aria-label="प्रवास मर्यादा (किमी) / Travel Radius (km)"
             min={5}
             max={35}
             step={5}

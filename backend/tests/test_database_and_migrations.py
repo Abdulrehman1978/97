@@ -60,3 +60,14 @@ def test_engine_connection_and_wal():
         res = conn.execute(Base.metadata.tables["users"].select().limit(1))
         # Connection succeeds
         assert res is not None
+
+def test_alembic_single_head_and_migration_revisions():
+    """Verify Alembic configuration has exactly one head revision pointing to the full initial schema."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    alembic_cfg = Config("alembic.ini")
+    script = ScriptDirectory.from_config(alembic_cfg)
+    heads = script.get_heads()
+    assert len(heads) == 1, f"Expected exactly 1 Alembic head revision, got {heads}"
+    head_rev = heads[0]
+    assert head_rev == "8f7083d5f517", f"Expected head revision 8f7083d5f517, got {head_rev}"

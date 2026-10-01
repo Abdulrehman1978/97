@@ -1,0 +1,11 @@
+version: '3.8'
+
+# SIH Judge / Local Demo Override Profile
+# Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
+
+services:
+  backend:
+    environment:
+      - ENVIRONMENT=demo
+      - DEMO_MODE=true
+      - SECRET_KEY=demo-secret-key-for-judges-and-evaluators

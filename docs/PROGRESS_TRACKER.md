@@ -47,12 +47,13 @@ To keep the platform simple, reliable, and cost-effective, the following compone
 | **Packet 20** | Security & Privacy Hardening | **PASS** | DPDP compliance, PII masking, caste redaction from employers, bcrypt password hashing, immutable audit logs |
 | **Packet 21** | Reliability, Observability & Background Jobs | **PASS** | Health checks (`/health/live`, `/health/ready`), DB worker runner, SQLite WAL mode |
 | **Packet 22** | Accessibility & Localization Hardening | **PASS** | GIGW 3.0 & WCAG 2.2 AA audit, screen reader support, keyboard nav, ReadAloudButton, 44px touch targets |
-| **Packet 23** | AI Evaluation & Responsible AI Gate | **PASS** | 46 automated backend tests passing in 4.35s, zero caste exposure to employers, deterministic hard gates |
-| **Packet 24** | Production Deployment & Docker Compose | **PASS** | Multi-stage `backend/Dockerfile` and `apps/web/Dockerfile`, `docker compose config` verified |
+| **Packet 23** | AI Evaluation & Responsible AI Gate | **PASS** | 58 automated backend tests passing in 13.89s, zero caste exposure to employers, deterministic hard gates |
+| **Packet 24** | Production Deployment & Docker Compose | **PASS** | Multi-stage `backend/Dockerfile` with `docker-entrypoint.sh` (migration first), `apps/web/Dockerfile`, `docker-compose.yml` (production) and `docker-compose.demo.yml` (demo profile) verified |
 | **Packet 25** | SIH Judge Environment & Requirement Traceability | **PASS** | Scientific `/demo` surface, judge live constraint manipulation, 3-min demo script, jury FAQ |
 | **Packet 26** | Pilot Readiness & Operational Playbooks | **PASS** | Field protocols, runbooks (`LOCAL_AND_DOCKER_RUNBOOK.md`, `PRODUCTION_READINESS.md`) |
 | **Packet 27** | Final Adversarial Audit & Release Gate | **PASS** | Verified against SIH26097 Problem Statement Traceability Matrix |
-| **Packet 28** | V3 Integrity, Integration & Production Hardening | **PASS_WITH_EXTERNAL_DEPENDENCY** | Real API client (`apps/web/src/lib/api/`), end-to-end 5-step beneficiary journey, zero fake fallbacks, 46 pytest tests passing, Next.js 16 Turbopack production build clean (16/16 routes), PostgreSQL driver & Alembic migrations verified |
+| **Packet 28** | V3 Integrity, Integration & Production Hardening | **PASS_WITH_EXTERNAL_DEPENDENCY** | Real API client committed (`apps/web/src/lib/api/`), end-to-end 5-step beneficiary journey, zero fake fallbacks, PostgreSQL driver & Alembic migrations verified |
+| **Packet 28.1** | Clean-Clone Reproducibility, Security Closure & Truthful Release Gate | **PASS** | `npm ci` cleanly reconciled without drift; 39-table Alembic initial migration verified on empty DB; `Base.metadata.create_all()` removed from production startup; mandatory RBAC and jurisdiction isolation on administrative and beneficiary routes; `/api/v1/identity/demo/switch-role` guarded behind `DEMO_MODE`; employer candidate PII strictly redacted; truth states corrected to `SANDBOX` and `DEMO_DATA`; 58/58 backend pytest passed; 14/14 Playwright E2E and axe-core a11y tests passed (0 critical violations); CI pipeline hardened |
 
 ---
 

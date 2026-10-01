@@ -123,7 +123,8 @@ def query_policy_rag(query: str) -> Dict[str, Any]:
         "abstained": False,
         "citations": [top_doc["citation"]],
         "source_publisher": top_doc["publisher"],
+        "source_kind": "OFFICIAL_REFERENCE",
         "effective_dates": f"{top_doc['effective_date']} to {top_doc['valid_until']}",
         "retrieved_excerpts": [top_doc["content"]],
-        "truth_state": "LIVE"
+        "truth_state": "DEMO_DATA"
     }
