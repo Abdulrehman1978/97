@@ -37,6 +37,18 @@ def test_candidate_matching_with_strict_caste_isolation():
         assert "privacy_notice" in can
 
 def test_create_and_update_application():
+    from backend.app.database import SessionLocal
+    from backend.app.beneficiary.models import Beneficiary
+    db = SessionLocal()
+    try:
+        ben = db.query(Beneficiary).filter(Beneficiary.id == "test-b-1").first()
+        if not ben:
+            ben = Beneficiary(id="test-b-1", full_name="Test Beneficiary Apps", phone="9222222299", district_code="MH-NAG")
+            db.add(ben)
+            db.commit()
+    finally:
+        db.close()
+
     ben_token = create_access_token({"sub": "test-b-1", "role": "beneficiary", "name": "Beneficiary 1"})
     # Submit application
     app_res = client.post("/api/v1/opportunities/apply", json={

@@ -60,6 +60,18 @@ def test_employer_candidate_list_never_leaks_caste():
 def test_xss_and_sql_injection_resilience_in_grievance():
     """Verify malicious script payloads in grievance submission do not crash the server and are safely escaped."""
     from backend.app.shared.security import create_access_token
+    from backend.app.database import SessionLocal
+    from backend.app.beneficiary.models import Beneficiary
+    db = SessionLocal()
+    try:
+        ben = db.query(Beneficiary).filter(Beneficiary.id == "demo-beneficiary-id").first()
+        if not ben:
+            ben = Beneficiary(id="demo-beneficiary-id", full_name="XSS Test Beneficiary", phone="9222222298", district_code="MH-NAG")
+            db.add(ben)
+            db.commit()
+    finally:
+        db.close()
+
     ben_token = create_access_token({"sub": "demo-beneficiary-id", "role": "beneficiary", "name": "Demo User"})
     malicious_payload = {
         "beneficiary_id": "demo-beneficiary-id",
