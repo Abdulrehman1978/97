@@ -19,7 +19,10 @@
 | **CORS Origins** | Wildcard `*` origins disabled in production mode. Restricted to configured frontend hostnames (`ALLOWED_ORIGINS`). | READY |
 | **JWT Secrets & Key Rotation** | `SECRET_KEY` validated on startup (minimum 32 characters). Cryptographically signed using HMAC-SHA256. | READY |
 | **Demo Isolation** | In production mode (`DEMO_MODE=false`), `/api/v1/identity/demo/switch-role` returns HTTP 404, and demo seed scripts are completely disabled. | READY |
+| **Automated Test Coverage** | 66/66 backend unit, integration, and security tests passing; 28/28 Playwright full-stack integrated E2E and a11y tests passing against live containerized stack. | READY |
 | **PWA Service Worker** | Static assets and offline core pages pre-cached via `/sw.js` with background synchronization queues. | READY |
+| **Flexible CORS & Port Binding** | Both comma-separated and JSON list `ALLOWED_ORIGINS` supported; automatic `PORT` binding (`${PORT:-8000}`) for container hosts. | READY |
+| **Database URI Normalization** | Automatic normalization of `postgres://` to `postgresql://` for managed cloud database compatibility. | READY |
 
 ---
 
