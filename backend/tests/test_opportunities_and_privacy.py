@@ -39,13 +39,18 @@ def test_candidate_matching_with_strict_caste_isolation():
 def test_create_and_update_application():
     from backend.app.database import SessionLocal
     from backend.app.beneficiary.models import Beneficiary
+    from backend.app.opportunities.models import TrainingOption
     db = SessionLocal()
+    training_opt_id = None
     try:
         ben = db.query(Beneficiary).filter(Beneficiary.id == "test-b-1").first()
         if not ben:
             ben = Beneficiary(id="test-b-1", full_name="Test Beneficiary Apps", phone="9222222299", district_code="MH-NAG")
             db.add(ben)
             db.commit()
+        opt = db.query(TrainingOption).first()
+        if opt:
+            training_opt_id = opt.id
     finally:
         db.close()
 
@@ -54,7 +59,7 @@ def test_create_and_update_application():
     app_res = client.post("/api/v1/opportunities/apply", json={
         "beneficiary_id": "test-b-1",
         "opportunity_id": None,
-        "training_option_id": "test-opt-1",
+        "training_option_id": training_opt_id,
         "application_type": "training"
     }, headers={"Authorization": f"Bearer {ben_token}"})
     assert app_res.status_code == 200
