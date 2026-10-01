@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
@@ -17,8 +20,8 @@ class User(Base):
     full_name = Column(String, nullable=False)
     role = Column(String, default="beneficiary") # beneficiary, field_worker, counsellor, financial_counsellor, provider, employer, district_admin, state_admin, ministry_admin
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     memberships = relationship("Membership", back_populates="user", cascade="all, delete-orphan")
 
@@ -31,7 +34,7 @@ class Organization(Base):
     jurisdiction_code = Column(String, nullable=True, index=True) # e.g. state code or district LGD code
     verification_status = Column(String, default="verified") # pending, verified, rejected, de_empanelled
     details = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     members = relationship("Membership", back_populates="organization", cascade="all, delete-orphan")
 
@@ -43,7 +46,7 @@ class Membership(Base):
     organization_id = Column(String, ForeignKey("organizations.id"), nullable=False)
     role = Column(String, nullable=False) # admin, staff, auditor
     jurisdiction_scope = Column(String, nullable=True) # block, district, state, national
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="memberships")
     organization = relationship("Organization", back_populates="members")
@@ -59,5 +62,5 @@ class Consent(Base):
     raw_audio_retention_opt_in = Column(Boolean, default=False)
     channel = Column(String, default="pwa") # pwa, ivr, whatsapp, kiosk, field_worker
     language = Column(String, default="en")
-    granted_at = Column(DateTime, default=datetime.utcnow)
+    granted_at = Column(DateTime, default=utcnow)
     revoked_at = Column(DateTime, nullable=True)

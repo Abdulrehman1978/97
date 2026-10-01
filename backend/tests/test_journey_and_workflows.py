@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.database import SessionLocal
@@ -45,7 +45,7 @@ def setup_journey_fixtures():
             referral_type="training_center",
             purpose="Hostel accommodation check for PM-AJAY batch",
             status="pending",
-            sla_due_date=datetime.utcnow() + timedelta(days=5)
+            sla_due_date=datetime.now(timezone.utc) + timedelta(days=5)
         )
         db.add(referral)
 

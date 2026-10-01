@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class Skill(Base):
     __tablename__ = "skills"
@@ -16,7 +19,7 @@ class Skill(Base):
     description = Column(Text, nullable=True)
     complexity_level = Column(Integer, default=2) # 1 (Basic/Task) to 5 (Master/Specialist)
     is_traditional_craft = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     aliases = relationship("SkillAlias", back_populates="skill", cascade="all, delete-orphan")
     occupation_links = relationship("OccupationSkill", back_populates="skill")
@@ -73,7 +76,7 @@ class Qualification(Base):
     duration_hours = Column(Integer, default=400)
     official_nqr_url = Column(String, nullable=True)
     rpl_eligible = Column(Boolean, default=True) # Eligible for Recognition of Prior Learning
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     competencies = relationship("QualificationCompetency", back_populates="qualification", cascade="all, delete-orphan")
 
@@ -114,4 +117,4 @@ class Program(Base):
     max_subsidy_amount_inr = Column(Float, default=50000.0)
     is_active = Column(Boolean, default=True)
     source_citation = Column(String, default="PM-AJAY Scheme Operational Guidelines 2023-26")
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow)

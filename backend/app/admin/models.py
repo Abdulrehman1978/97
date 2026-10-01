@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class EnterprisePlan(Base):
     __tablename__ = "enterprise_plans"
@@ -23,7 +26,7 @@ class EnterprisePlan(Base):
     counsellor_id = Column(String, nullable=True)
     counsellor_notes = Column(Text, nullable=True)
     status = Column(String, default="draft") # draft, counsellor_reviewed, applied, active
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 class Source(Base):
     __tablename__ = "sources"
@@ -35,7 +38,7 @@ class Source(Base):
     canonical_url = Column(String, nullable=True)
     update_frequency = Column(String, default="monthly")
     freshness_sla_days = Column(Integer, default=30)
-    last_success_at = Column(DateTime, default=datetime.utcnow)
+    last_success_at = Column(DateTime, default=utcnow)
     quality_status = Column(String, default="healthy") # healthy, warning, stale
     notes = Column(Text, nullable=True)
 
@@ -47,8 +50,8 @@ class IngestionRun(Base):
     status = Column(String, default="success") # success, failed, running
     records_ingested = Column(Integer, default=0)
     error_summary = Column(Text, nullable=True)
-    started_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, default=utcnow)
+    completed_at = Column(DateTime, default=utcnow)
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"
@@ -62,7 +65,7 @@ class AuditEvent(Base):
     jurisdiction_code = Column(String, nullable=True)
     details = Column(JSON, default=dict)
     ip_address = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
 
 class BackgroundJob(Base):
     __tablename__ = "background_jobs"
@@ -72,8 +75,8 @@ class BackgroundJob(Base):
     payload = Column(JSON, default=dict)
     status = Column(String, default="pending", index=True) # pending, processing, completed, failed
     attempts = Column(Integer, default=0)
-    available_at = Column(DateTime, default=datetime.utcnow)
+    available_at = Column(DateTime, default=utcnow)
     locked_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

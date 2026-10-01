@@ -11,7 +11,7 @@ Includes:
 - Optional Demo data (isolated behind settings.DEMO_MODE)
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from backend.app.config import settings
@@ -234,7 +234,7 @@ def seed_reference_data(db: Session):
     db.flush()
 
     print("[SEED] Seeding NQR Qualifications with Validity Windows...")
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     q_auto = Qualification(
         qp_code="ASC/Q1411",
         title="Two Wheeler Service Technician",
@@ -394,8 +394,8 @@ def seed_demo_data(db: Session):
             truth_state="DEMO_DATA",
             seat_capacity=30,
             seats_available=14,
-            start_date=datetime.utcnow() + timedelta(days=12),
-            end_date=datetime.utcnow() + timedelta(days=102),
+            start_date=datetime.now(timezone.utc) + timedelta(days=12),
+            end_date=datetime.now(timezone.utc) + timedelta(days=102),
             fee_type="100% Free under PM-AJAY GIA"
         )
         db.add(to_auto_live)
@@ -409,8 +409,8 @@ def seed_demo_data(db: Session):
             truth_state="DEMO_DATA",
             seat_capacity=25,
             seats_available=8,
-            start_date=datetime.utcnow() + timedelta(days=15),
-            end_date=datetime.utcnow() + timedelta(days=85),
+            start_date=datetime.now(timezone.utc) + timedelta(days=15),
+            end_date=datetime.now(timezone.utc) + timedelta(days=85),
             fee_type="100% Free under PM-AJAY GIA"
         )
         db.add(to_tailor_live)

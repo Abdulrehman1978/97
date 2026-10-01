@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class AdminArea(Base):
     __tablename__ = "admin_areas"
@@ -32,7 +35,7 @@ class TrainingCenter(Base):
     contact_phone = Column(String, nullable=True)
     latitude = Column(Float, default=21.1458)
     longitude = Column(Float, default=79.0882)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     training_options = relationship("TrainingOption", back_populates="center", cascade="all, delete-orphan")
 
@@ -51,7 +54,7 @@ class TrainingOption(Base):
     end_date = Column(DateTime, nullable=True)
     fee_type = Column(String, default="100% Free under PM-AJAY GIA")
     stipend_details = Column(String, default="As per PM-AJAY norms where eligible")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     center = relationship("TrainingCenter", back_populates="training_options")
     qualification = relationship("Qualification")
@@ -73,7 +76,7 @@ class EmployerOpportunity(Base):
     is_accessible_workplace = Column(Boolean, default=True)
     truth_state = Column(String, default="DEMO_DATA") # Clearly labeled demo or live
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     applications = relationship("Application", back_populates="opportunity", cascade="all, delete-orphan")
 
@@ -86,8 +89,8 @@ class Application(Base):
     training_option_id = Column(String, ForeignKey("training_options.id"), nullable=True, index=True)
     application_type = Column(String, default="training") # training, job, apprenticeship
     status = Column(String, default="applied") # applied, shortlisted, interviewing, offered, joined, rejected
-    applied_at = Column(DateTime, default=datetime.utcnow)
-    status_updated_at = Column(DateTime, default=datetime.utcnow)
+    applied_at = Column(DateTime, default=utcnow)
+    status_updated_at = Column(DateTime, default=utcnow)
 
     opportunity = relationship("EmployerOpportunity", back_populates="applications")
 
@@ -102,5 +105,5 @@ class LocalEconomicSignal(Base):
     description = Column(Text, nullable=False)
     intensity_score = Column(Float, default=0.8) # 0.0 to 1.0 demand strength
     source_name = Column(String, default="DPIIT ODOP & District MSME Survey")
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=utcnow)
     freshness_status = Column(String, default="fresh") # fresh, stale, unconfirmed

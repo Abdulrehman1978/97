@@ -234,12 +234,30 @@ def test_jurisdiction_matrix(setup_jurisdiction_fixtures):
 
 def test_provider_organization_ownership(setup_jurisdiction_fixtures):
     """Provider A can create batches for Provider A centers, but is forbidden on Provider B centers."""
+    from backend.app.knowledge.models import Qualification
+    db = SessionLocal()
+    try:
+        qp = db.query(Qualification).first()
+        if not qp:
+            qp = Qualification(
+                id="qp-test-ownership-1",
+                qp_code="QP-TEST-OWN-01",
+                title="Automotive Technician Test",
+                nsqf_level=4,
+            )
+            db.add(qp)
+            db.commit()
+            db.refresh(qp)
+        qp_id = qp.id
+    finally:
+        db.close()
+
     token_prov_a = create_access_token({"sub": "u-test-prov-a", "role": "provider", "name": "Provider A"})
 
     # Provider A creates batch for Center A (owned) -> 200
     res_ok = client.post("/api/v1/opportunities/training-options", json={
         "center_id": "tc-test-a",
-        "qualification_id": "dummy-qp",
+        "qualification_id": qp_id,
         "batch_code": "BATCH-TEST-A1",
         "seat_capacity": 30,
         "seats_available": 30
@@ -249,7 +267,7 @@ def test_provider_organization_ownership(setup_jurisdiction_fixtures):
     # Provider A tries to create batch for Center B (owned by Provider B) -> 403 Forbidden
     res_forbidden = client.post("/api/v1/opportunities/training-options", json={
         "center_id": "tc-test-b",
-        "qualification_id": "dummy-qp",
+        "qualification_id": qp_id,
         "batch_code": "BATCH-TEST-B1",
         "seat_capacity": 30,
         "seats_available": 30

@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class Beneficiary(Base):
     __tablename__ = "beneficiaries"
@@ -22,8 +25,8 @@ class Beneficiary(Base):
     age = Column(Integer, nullable=True)
     primary_language = Column(String, default="mr") # mr (Marathi), hi (Hindi), ta, te, en, etc.
     is_shared_phone = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     profile = relationship("BeneficiaryProfile", back_populates="beneficiary", uselist=False, cascade="all, delete-orphan")
     work_experiences = relationship("WorkExperience", back_populates="beneficiary", cascade="all, delete-orphan")
@@ -75,7 +78,7 @@ class BeneficiaryProfile(Base):
         "low_literacy_mode": True
     })
     profile_version = Column(Integer, default=1)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     beneficiary = relationship("Beneficiary", back_populates="profile")
 
@@ -93,7 +96,7 @@ class WorkExperience(Base):
     responsibility_level = Column(String, default="independent_and_assisted") # assisted, independent, supervisory
     raw_utterance = Column(Text, nullable=True)
     is_verified = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     beneficiary = relationship("Beneficiary", back_populates="work_experiences")
 
@@ -107,7 +110,7 @@ class BeneficiarySkill(Base):
     confidence_score = Column(Float, default=0.85) # 0.0 to 1.0 confidence in AI extraction
     verification_status = Column(String, default="beneficiary_confirmed") # self_reported, ai_inferred, beneficiary_confirmed, worker_verified, document_verified
     evidence_utterance = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     beneficiary = relationship("Beneficiary", back_populates="skills")
     evidence_items = relationship("SkillEvidence", back_populates="beneficiary_skill", cascade="all, delete-orphan")

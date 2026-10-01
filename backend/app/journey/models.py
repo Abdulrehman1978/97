@@ -1,11 +1,14 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, JSON, Text
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 class RecommendationRun(Base):
     __tablename__ = "recommendation_runs"
@@ -14,7 +17,7 @@ class RecommendationRun(Base):
     beneficiary_id = Column(String, ForeignKey("beneficiaries.id"), nullable=False, index=True)
     engine_version = Column(String, default="v3.0.0-hybrid")
     execution_time_ms = Column(Integer, default=45)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     recommendations = relationship("Recommendation", back_populates="run", cascade="all, delete-orphan")
 
@@ -45,7 +48,7 @@ class Recommendation(Base):
     uncertainty_level = Column(String, default="low") # low, moderate, needs_field_verification
     truth_state = Column(String, default="LIVE")
     rank = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     run = relationship("RecommendationRun", back_populates="recommendations")
     occupation = relationship("Occupation")
@@ -73,7 +76,7 @@ class Pathway(Base):
     title = Column(String, nullable=False)
     pathway_category = Column(String, default="wage_employment") # wage_employment, apprenticeship, self_employment, rpl_certification
     status = Column(String, default="active") # active, completed, modified, paused
-    selected_at = Column(DateTime, default=datetime.utcnow)
+    selected_at = Column(DateTime, default=utcnow)
 
     actions = relationship("PathwayAction", back_populates="pathway", cascade="all, delete-orphan")
 
@@ -101,8 +104,8 @@ class Case(Base):
     case_type = Column(String, default="standard_livelihood") # standard_livelihood, self_employment_finance, rpl_fast_track
     status = Column(String, default="open") # open, referred_to_training, in_counselling, placed, escalated, resolved, closed
     priority = Column(String, default="medium") # low, medium, high, urgent
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     events = relationship("CaseEvent", back_populates="case", cascade="all, delete-orphan")
     referrals = relationship("Referral", back_populates="case", cascade="all, delete-orphan")
@@ -118,7 +121,7 @@ class CaseEvent(Base):
     event_type = Column(String, nullable=False) # note, recommendation_override, interview_update, contact_attempt, escalation
     notes = Column(Text, nullable=False)
     metadata_json = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     case = relationship("Case", back_populates="events")
 
@@ -133,7 +136,7 @@ class Referral(Base):
     status = Column(String, default="pending") # pending, acknowledged, enrolled, rejected, completed
     sla_due_date = Column(DateTime, nullable=True)
     blocker_reason = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     case = relationship("Case", back_populates="referrals")
 
@@ -162,7 +165,7 @@ class Grievance(Base):
     description = Column(Text, nullable=False)
     status = Column(String, default="submitted") # submitted, under_investigation, resolved, closed
     resolution_notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     resolved_at = Column(DateTime, nullable=True)
 
 class Outcome(Base):
@@ -176,4 +179,4 @@ class Outcome(Base):
     wage_band_inr = Column(String, default="15000-18000")
     retention_90d_verified = Column(Boolean, default=True)
     retention_180d_verified = Column(Boolean, default=True)
-    verified_at = Column(DateTime, default=datetime.utcnow)
+    verified_at = Column(DateTime, default=utcnow)

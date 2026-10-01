@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { apiFetch, getStoredToken, clearStoredToken, setStoredToken } from "./client";
 import { AuthError } from "./errors";
 
@@ -175,6 +177,15 @@ interface RequireAuthProps {
 
 export function RequireAuth({ children, roles, fallback }: RequireAuthProps) {
   const { status, user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (status !== "checking" && (status !== "authenticated" || !user)) {
+      const dest = encodeURIComponent(pathname || "/");
+      router.push(`/login?next=${dest}`);
+    }
+  }, [status, user, pathname, router]);
 
   if (status === "checking") {
     return (
@@ -192,11 +203,6 @@ export function RequireAuth({ children, roles, fallback }: RequireAuthProps) {
   }
 
   if (status !== "authenticated" || !user) {
-    // Redirect to login preserving the intended destination
-    if (typeof window !== "undefined") {
-      const dest = encodeURIComponent(window.location.pathname);
-      window.location.href = `/login?next=${dest}`;
-    }
     return null;
   }
 
@@ -212,9 +218,9 @@ export function RequireAuth({ children, roles, fallback }: RequireAuthProps) {
             Your role (<code className="bg-slate-100 px-1 rounded">{user.role}</code>) is not
             authorized to access this section.
           </p>
-          <a href="/" className="mt-4 inline-block text-sm font-bold text-[#0f4c81] hover:underline">
+          <Link href="/" className="mt-4 inline-block text-sm font-bold text-[#0f4c81] hover:underline">
             ← Return to Home
-          </a>
+          </Link>
         </div>
       </div>
     );
