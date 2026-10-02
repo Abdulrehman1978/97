@@ -55,13 +55,7 @@ export default function InterviewPage() {
       recognition.onend = () => setIsRecording(false);
       recognition.start();
     } else {
-      setIsRecording(!isRecording);
-      if (!isRecording) {
-        setTimeout(() => {
-          setIsRecording(false);
-          runExtraction(transcript);
-        }, 1500);
-      }
+      setApiError("Voice recognition is not supported in this browser. Type your story below, then choose Analyze My Skills.");
     }
   };
 
@@ -108,6 +102,11 @@ export default function InterviewPage() {
   };
 
   const handleConfirmAndPersist = async () => {
+    if (!user) {
+      setSaveError("Sign in before saving your profile. Your skill preview remains available here; no anonymous profile has been created.");
+      setConfirmState("error");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -121,6 +120,7 @@ export default function InterviewPage() {
         gender: "unspecified",
         age: undefined,
         primary_language: "mr",
+        confirmed_transcript: transcript,
         profile_data: {
           education: { highest_level: editableEdu },
           mobility: { max_travel_distance_km: editableTravel },
@@ -173,7 +173,7 @@ export default function InterviewPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main id="main-content" className="workspace-main max-w-3xl mx-auto px-4 py-6">
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -192,7 +192,7 @@ export default function InterviewPage() {
         {/* Spoken Prompt Card */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm text-center">
           <div className="flex justify-end mb-2">
-            <ReadAloudButton text={promptText} />
+          <ReadAloudButton text={promptText} />
           </div>
 
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">

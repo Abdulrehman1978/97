@@ -34,7 +34,7 @@ export const getRecommendations = (profile?: any, skill_ids?: string[], district
     pathways: any[];
   }>("/api/v1/intelligence/recommend", {
     method: "POST",
-    body: JSON.stringify({ profile, skill_ids, district_code })
+    body: JSON.stringify(profile && "beneficiary_id" in profile ? profile : { profile, skill_ids, district_code })
   });
 
 export const checkRpl = (qualification_id: string, beneficiary_skill_ids: string[] = [], experience_months = 24) =>

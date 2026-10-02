@@ -10,38 +10,12 @@ import { CheckCircle2, Clock, MapPin, Building2, AlertCircle, ArrowUpRight, Phon
 
 export default function JourneyPage() {
   const [loading, setLoading] = useState(true);
-  const [pathwayTitle, setPathwayTitle] = useState("Automotive Two Wheeler Service Technician (NSQF L4)");
+  const [pathwayTitle, setPathwayTitle] = useState("No pathway selected");
   const [truthState, setTruthState] = useState<"LIVE" | "DEMO_DATA">("LIVE");
-  const [actions, setActions] = useState<any[]>([
-    {
-      id: "act-1",
-      title: "आवश्यक कागदपत्रे गोळा करा (Prepare Documents)",
-      desc: "जातीचा दाखला (SC Certificate), उत्पन्न दाखला आणि आधार लिंक बँक खाते.",
-      completed: true,
-      due: "2 Oct 2026"
-    },
-    {
-      id: "act-2",
-      title: "पूर्व कौशल्य पडताळणी व RPL चाचणी (RPL Assessment)",
-      desc: "हिंगणा येथील अधिकृत केंद्रावर १ दिवसाची प्रत्यक्ष प्रात्यक्षिक परीक्षा.",
-      completed: false,
-      due: "8 Oct 2026"
-    },
-    {
-      id: "act-3",
-      title: "मोफत पीएम-अजय बॅच प्रवेश निश्चित करा (Batch Enrollment)",
-      desc: "बॅच क्रमांक PM-AJAY-NAG-2026-B1 मध्ये जागा निश्चित करणे.",
-      completed: false,
-      due: "15 Oct 2026"
-    },
-    {
-      id: "act-4",
-      title: "रोजगार / व्यवसाय मदत (Placement Linkage)",
-      desc: "महिंद्रा फर्स्ट चॉईस सर्व्हिस नेटवर्कमध्ये मुलाखत किंवा टूल किट अनुदान.",
-      completed: false,
-      due: "30 Nov 2026"
-    }
-  ]);
+  const [actions, setActions] = useState<any[]>([]);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchJourney = async () => {
@@ -61,7 +35,7 @@ export default function JourneyPage() {
               title: a.title,
               desc: a.description || "",
               completed: a.status === "completed",
-              due: a.due_date || "Within 14 days"
+              due: a.due_date || "Not scheduled"
             }));
             setActions(mappedActions);
           }
@@ -72,7 +46,7 @@ export default function JourneyPage() {
           }
         }
       } catch (err) {
-        console.warn("Using offline/resilient journey defaults:", err);
+        setError(err instanceof Error ? err.message : "Journey could not be loaded.");
       } finally {
         setLoading(false);
       }
@@ -82,17 +56,25 @@ export default function JourneyPage() {
 
   const toggleAction = async (id: string) => {
     const target = actions.find(a => a.id === id);
-    if (!target) return;
+    if (!target || pending) return;
+    setPending(id); setError(""); setNotice("");
     const newCompleted = !target.completed;
     const newStatus = newCompleted ? "completed" : "pending";
 
-    // Optimistic UI update
-    setActions(actions.map(a => a.id === id ? { ...a, completed: newCompleted } : a));
+
 
     try {
-      await updateActionStatus(id, newStatus);
+      const result = await updateActionStatus(id, newStatus);
+      if (result.is_offline || result.status === "offline_queued") {
+        setNotice("Queued offline — not yet saved to the server. Reconnect and refresh after sync.");
+      } else {
+        setActions(items => items.map(a => a.id === id ? { ...a, completed: newCompleted } : a));
+        setNotice("Progress saved.");
+      }
     } catch (err) {
-      console.warn("Action update queued offline or recorded locally:", err);
+      setError(err instanceof Error ? err.message : "Progress was not saved.");
+    } finally {
+      setPending(null);
     }
   };
 
@@ -103,7 +85,10 @@ export default function JourneyPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main id="main-content" className="workspace-main max-w-4xl mx-auto px-4 py-6">
+        {error && <p role="alert" className="p-4 bg-red-50 text-red-900 rounded-xl">{error} <a href="/login?next=/journey" className="underline">Sign in</a></p>}
+        {notice && <p role="status" className="p-4 bg-sky-50 text-sky-900 rounded-xl">{notice}</p>}
+        {!loading && !error && actions.length === 0 && <p>No saved action plan. <a href="/pathways" className="underline">Choose a pathway</a>.</p>}
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
@@ -121,7 +106,7 @@ export default function JourneyPage() {
             </p>
           </div>
 
-          <ReadAloudButton text="तुमची पुढील पायरी म्हणजे पूर्व कौशल्य पडताळणी. हिंगणा केंद्रावर जाऊन प्रात्यक्षिक चाचणी द्या." />
+          <ReadAloudButton text={nextStep ? `${nextStep.title}. ${nextStep.desc}` : "No pending action is recorded."} />
         </div>
 
         {/* DOMINANT HERO: Single Next Action */}
@@ -141,6 +126,7 @@ export default function JourneyPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
+                disabled={!!pending}
                 onClick={() => toggleAction(nextStep.id)}
                 className="px-5 py-2 bg-white text-[#0f4c81] text-xs font-bold rounded-xl hover:bg-slate-50 transition-colors shadow touch-target"
               >
@@ -167,6 +153,10 @@ export default function JourneyPage() {
             {actions.map((act) => (
               <div
                 key={act.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={act.completed}
+                onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void toggleAction(act.id); } }}
                 onClick={() => toggleAction(act.id)}
                 className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 touch-target ${
                   act.completed
@@ -195,42 +185,6 @@ export default function JourneyPage() {
           </div>
         </div>
 
-        {/* Linked Training Center & Verified Employer Card */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#0f4c81] mb-2">
-              <MapPin className="w-4 h-4" />
-              <span>अधिकृत प्रशिक्षण केंद्र (Training Center)</span>
-            </div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Nagpur Central Livelihood Center
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Plot 14, MIDC Industrial Area, Hingna Road, Nagpur • अंतर: 11.5 किमी
-            </p>
-            <div className="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
-              <span className="font-semibold text-emerald-700">✓ 14 जागा शिल्लक (Seats Open)</span>
-              <TruthBadge state="LIVE" />
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 text-xs font-bold text-sky-700 mb-2">
-              <Building2 className="w-4 h-4" />
-              <span>प्रमाणित रोजगार जोडणी (Verified Placement)</span>
-            </div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Mahindra First Choice Service Network
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              अपेक्षित वेतन: Rs. 15,000 - 18,000 / महिना • हिंगणा वर्कशॉप
-            </p>
-            <div className="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-100">
-              <span className="text-slate-500">प्रमाणपत्रानंतर थेट मुलाखत</span>
-              <TruthBadge state="DEMO_DATA" />
-            </div>
-          </div>
-        </div>
       </main>
     </div>
   );

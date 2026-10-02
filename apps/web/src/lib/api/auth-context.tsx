@@ -92,12 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         body: JSON.stringify({ username, password }),
       });
+      clearStoredToken();
       setStoredToken(data.access_token);
       // Load authoritative user from /identity/me (not trusting login payload alone)
       const me = await fetchMe();
       if (me) {
         setUser(me);
-        setStatus("authenticated");
         if (me.role === "beneficiary") {
           try {
             const ben = await apiFetch<{ id: string }>("/api/v1/beneficiaries/me");
@@ -109,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // New user without beneficiary record yet
           }
         }
+        setStatus("authenticated");
       } else {
         clearStoredToken();
         throw new Error("Session could not be established after login");

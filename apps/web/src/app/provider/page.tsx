@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { DataState } from "@/components/DataState";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
 import { 
@@ -23,6 +24,7 @@ export default function ProviderPortalPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [centers, setCenters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showAddBatch, setShowAddBatch] = useState(false);
   const [formData, setFormData] = useState({
     qualification_id: "qual-two-wheeler-1",
@@ -37,13 +39,15 @@ export default function ProviderPortalPage() {
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      setLoading(true); setLoadError("");
       const [bList, cList] = await Promise.all([
-        getTrainingOptions("MH-NAG").catch(() => []),
-        getTrainingCenters("MH-NAG").catch(() => [])
+        getTrainingOptions("MH-NAG"),
+        getTrainingCenters("MH-NAG")
       ]);
       setBatches(bList);
       setCenters(cList);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Data could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -75,11 +79,12 @@ export default function ProviderPortalPage() {
     }
   };
 
+  if (loadError) return <DataState title="Workspace unavailable" message={loadError} retry={loadData} />;
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main id="main-content" className="workspace-main flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Header & Verification Status */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

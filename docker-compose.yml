@@ -10,8 +10,8 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/lip_db
       - DATABASE_SYNC_URL=postgresql://postgres:postgres@db:5432/lip_db
-      - SECRET_KEY=${SECRET_KEY:-lip-production-secret-must-be-set-in-env}
-      - DEMO_MODE=${DEMO_MODE:-true}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - DEMO_MODE=${DEMO_MODE:-false}
     depends_on:
       db:
         condition: service_healthy

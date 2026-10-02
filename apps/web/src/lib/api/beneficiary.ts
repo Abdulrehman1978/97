@@ -11,6 +11,7 @@ export interface CreateBeneficiaryPayload {
   age?: number;
   primary_language?: string;
   profile_data?: Record<string, any>;
+  confirmed_transcript?: string;
 }
 
 export interface ProfileUpdatePayload {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { DataState } from "@/components/DataState";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
 import { 
@@ -30,6 +31,7 @@ export default function EmployerPortalPage() {
   const [applications, setApplications] = useState<any[]>([]);
   const [searchSkill, setSearchSkill] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showAddJob, setShowAddJob] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
 
@@ -47,15 +49,17 @@ export default function EmployerPortalPage() {
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      setLoading(true); setLoadError("");
       const [jList, cList, aList] = await Promise.all([
-        getEmployerJobs("MH-NAG").catch(() => []),
-        getEmployerCandidates(searchSkill, "MH-NAG").catch(() => []),
-        getApplications().catch(() => [])
+        getEmployerJobs("MH-NAG"),
+        getEmployerCandidates(searchSkill, "MH-NAG"),
+        getApplications()
       ]);
       setJobs(jList);
       setCandidates(cList);
       setApplications(aList);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Data could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -98,11 +102,12 @@ export default function EmployerPortalPage() {
     }
   };
 
+  if (loadError) return <DataState title="Workspace unavailable" message={loadError} retry={loadData} />;
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main id="main-content" className="workspace-main flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Employer Header */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

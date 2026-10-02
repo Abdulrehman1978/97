@@ -82,7 +82,7 @@ export default function HelpPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main id="main-content" className="workspace-main max-w-3xl mx-auto px-4 py-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
             <div className="flex items-center gap-2">

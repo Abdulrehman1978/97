@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { downloadDraft } from "@/lib/download-draft";
+import { useRuntimeTruth } from "@/components/RuntimeTruth";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
 import { getDistrictDashboard, simulateBatch, buildProjectProposal, getSourceHealth } from "@/lib/api";
 import { LayoutDashboard, Users, GraduationCap, MapPin, Calculator, FileSpreadsheet, ShieldCheck, AlertCircle } from "lucide-react";
 
 export default function AdminPortalPage() {
+  const truth = useRuntimeTruth();
+  const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "batch_planner" | "project_builder" | "sources">("overview");
   const [dashboard, setDashboard] = useState<any>(null);
   const [sources, setSources] = useState<any[]>([]);
@@ -18,8 +22,8 @@ export default function AdminPortalPage() {
   const [selectedQp, setSelectedQp] = useState<string>("ASC/Q1411");
 
   useEffect(() => {
-    getDistrictDashboard("MH-NAG").then(setDashboard).catch(console.warn);
-    getSourceHealth().then(setSources).catch(console.warn);
+    getDistrictDashboard("MH-NAG").then(setDashboard).catch(e => setError(e.message || "Data could not be loaded."));
+    getSourceHealth().then(setSources).catch(e => setError(e.message || "Data could not be loaded."));
   }, []);
 
   const handleSimulateBatch = async () => {
@@ -27,7 +31,7 @@ export default function AdminPortalPage() {
       const res = await simulateBatch("MH-NAG", selectedQp, proposedCapacity);
       setBatchResult(res);
     } catch (e) {
-      console.warn("Using local simulation:", e);
+      setBatchResult(null); setError(e instanceof Error ? e.message : "Simulation failed.");
     }
   };
 
@@ -42,7 +46,7 @@ export default function AdminPortalPage() {
       });
       setProposalResult(res);
     } catch (e) {
-      console.warn("Using local proposal:", e);
+      setProposalResult(null); setError(e instanceof Error ? e.message : "Proposal failed.");
     }
   };
 
@@ -50,7 +54,8 @@ export default function AdminPortalPage() {
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main id="main-content" className="workspace-main max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {error && <p role="alert" className="p-4 bg-red-50 text-red-900">{error}</p>}
         {/* District Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
@@ -70,7 +75,7 @@ export default function AdminPortalPage() {
 
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold">
-              ✓ NCVET / NQR Freshness: SLA Met
+              Review source freshness in Source Health
             </span>
           </div>
         </div>
@@ -127,7 +132,7 @@ export default function AdminPortalPage() {
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">ऑनबोर्ड लाभार्थी</span>
                 <div className="text-2xl font-bold text-slate-900 mt-1">{dashboard.total_beneficiaries_onboarded}</div>
-                <span className="text-[10px] text-emerald-600 font-semibold">+18% this month</span>
+                <span className="text-[10px] text-slate-600 font-semibold">Recorded total · no trend comparison</span>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">सक्रिय प्रशिक्षण केंद्रे</span>
@@ -330,10 +335,10 @@ export default function AdminPortalPage() {
 
                   <div className="pt-2 flex justify-end">
                     <button
-                      onClick={() => alert("प्रस्ताव शासकीय फॉरमॅटमध्ये एक्सपोर्ट झाला आहे!")}
+                      onClick={() => downloadDraft("district-project-draft", proposalResult, truth)}
                       className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors"
                     >
-                      शासकीय प्रस्तावाची प्रत डाउनलोड करा (Export PDF/Annexure)
+                      प्रस्तावाचा मसुदा डाउनलोड करा (Download Draft JSON)
                     </button>
                   </div>
                 </div>

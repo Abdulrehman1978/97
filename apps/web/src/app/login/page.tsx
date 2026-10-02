@@ -25,7 +25,8 @@ const DEMO_ROLES = [
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/interview";
+  const requestedPath = searchParams.get("next") || "/interview";
+  const nextPath = requestedPath.startsWith("/") && !requestedPath.startsWith("//") && !requestedPath.includes("\\") ? requestedPath : "/interview";
   const { status, user, login, switchDemoRole } = useAuth();
 
   const [username, setUsername] = useState("");

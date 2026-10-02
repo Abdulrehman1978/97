@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { DataState } from "@/components/DataState";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
 import { getCoordinationItems, updateCoordinationStatus } from "@/lib/api";
@@ -8,38 +9,18 @@ import { ArrowRightLeft, Clock, ShieldCheck, AlertCircle, CheckCircle2, RefreshC
 
 export default function InterAgencyCoordinationPage() {
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<any[]>([
-    {
-      id: "COORD-2026-001",
-      beneficiary_name: "Ramesh Mesram",
-      from_dept: "District Skill Committee (DSC) Nagpur",
-      to_dept: "Vidarbha Skills Academy (PIA)",
-      action_required: "Verify workshop tools & confirm RPL assessment date",
-      sla_days_remaining: 3,
-      status: "In Progress",
-      blocker: "None"
-    },
-    {
-      id: "COORD-2026-002",
-      beneficiary_name: "Sunita Kamble",
-      from_dept: "Field Counsellor Desk",
-      to_dept: "Mahatma Phule BC Development Corporation (MPBCDC)",
-      action_required: "Verify Caste validity and revenue income certificate",
-      sla_days_remaining: -1, // Escalated!
-      status: "Escalated",
-      blocker: "Revenue portal server response delay"
-    }
-  ]);
+  const [items, setItems] = useState<any[]>([]);
+  const [error, setError] = useState("");
 
   const fetchItems = async () => {
-    setLoading(true);
+    setLoading(true); setError("");
     try {
       const data = await getCoordinationItems();
-      if (data && data.length > 0) {
+      if (data) {
         setItems(data);
       }
     } catch (err) {
-      console.warn("Using default coordination items:", err);
+      setError(err instanceof Error ? err.message : "Referrals could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -55,16 +36,17 @@ export default function InterAgencyCoordinationPage() {
       await updateCoordinationStatus(referralId, newStatus);
       fetchItems();
     } catch (e) {
-      console.warn("Status update fallback:", e);
-      setItems(items.map(it => it.id === referralId ? { ...it, status: newStatus.replace("_", " ").toUpperCase() } : it));
+      setError(e instanceof Error ? e.message : "Status was not saved.");
     }
   };
 
+  if (loading) return <DataState title="Loading referrals" message="Retrieving coordination records…" />;
+  if (error) return <DataState title="Coordination unavailable" message={error} retry={fetchItems} />;
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
       <Navbar />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main id="main-content" className="workspace-main max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
             <div className="flex items-center gap-2">
@@ -82,7 +64,7 @@ export default function InterAgencyCoordinationPage() {
           </div>
 
           <span className="px-3 py-1 bg-sky-50 text-[#0f4c81] rounded-xl text-xs font-bold border border-sky-200">
-            SLA Compliance: 91.4%
+            SLA compliance not measured
           </span>
         </div>
 

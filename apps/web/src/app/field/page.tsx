@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { DataState } from "@/components/DataState";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
 import { getCases, counsellorOverride } from "@/lib/api";
@@ -18,29 +19,10 @@ export default function FieldWorkerPage() {
     "Candidate already owns ancestral plot and basic compressor in village; enterprise model has higher family survival than distant wage employment."
   );
 
-  const defaultCases = [
-    {
-      id: "CASE-2026-NAG-01",
-      name: "Ramesh Mesram",
-      village: "Nildoh, Hingna",
-      phone: "9876543210",
-      current_rec: "Automotive Service Technician (Wage)",
-      status: "In Assessment",
-      verified: true
-    },
-    {
-      id: "CASE-2026-NAG-02",
-      name: "Sunita Kamble",
-      village: "Wadi, Nagpur",
-      phone: "9823114455",
-      current_rec: "Self Employed Tailor",
-      status: "Document Verification",
-      verified: false
-    }
-  ];
+  const [loadError, setLoadError] = useState("");
 
   const fetchCases = async () => {
-    setLoading(true);
+    setLoading(true); setLoadError("");
     try {
       const data = await getCases("MH-NAG");
       if (data && data.length > 0) {
@@ -48,11 +30,11 @@ export default function FieldWorkerPage() {
         setSelectedCase(data[0].id);
         setCurrentRec(data[0].current_rec || "Automotive Service Technician (Wage)");
       } else {
-        setCases(defaultCases);
+        setCases([]);
       }
     } catch (e) {
-      console.warn("Using default field caseload:", e);
-      setCases(defaultCases);
+      setLoadError(e instanceof Error ? e.message : "Caseload unavailable.");
+      setCases([]);
     } finally {
       setLoading(false);
     }
@@ -83,11 +65,15 @@ export default function FieldWorkerPage() {
     }
   };
 
+  if (loading) return <DataState title="Loading caseload" message="Retrieving assigned cases…" />;
+  if (loadError) return <DataState title="Caseload unavailable" message={loadError} retry={fetchCases} />;
+  if (!cases.length) return <DataState title="No assigned cases" message="Your authorized caseload is empty. No sample records have been substituted." retry={fetchCases} />;
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
       <Navbar />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <main id="main-content" className="workspace-main max-w-5xl mx-auto px-4 sm:px-6 py-6">
+        {overrideError && <p role="alert" className="p-4 bg-red-50 text-red-900">{overrideError}</p>}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
             <div className="flex items-center gap-2">

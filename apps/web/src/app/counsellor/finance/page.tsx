@@ -1,76 +1,46 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { DataState } from "@/components/DataState";
+import { downloadDraft } from "@/lib/download-draft";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
-import { getEnterprisePlan } from "@/lib/api";
+import { getEnterprisePlan, getCases } from "@/lib/api";
 import { Briefcase, IndianRupee, ShieldCheck, CheckSquare, AlertTriangle, FileText, RefreshCw } from "lucide-react";
 
 export default function FinancialCounsellorPage() {
   const [loading, setLoading] = useState(true);
-  const [enterpriseCase, setEnterpriseCase] = useState<any>({
-    beneficiary_name: "Ramesh Mesram",
-    target_enterprise: "Two-Wheeler Service & Spare Parts Center",
-    district: "Nagpur (MH)",
-    assumed_capital_needs: {
-      equipment_capex: 75000,
-      working_capital_opex: 25000,
-      total_estimated_inr: 100000,
-      break_even_months: 6
-    },
-    scheme_prescreening: [
-      {
-        scheme_name: "PM-AJAY Grants-in-Aid (GIA) Asset Subsidy",
-        indicative_amount: "Up to ₹50,000 (100% Grant)",
-        status: "Potentially Relevant (Pre-screening)",
-        condition: "SC candidate with income <= 2.5L and verified NSQF L4 certificate. Sanction subject to DSC approval."
-      },
-      {
-        scheme_name: "NSFDC Micro-Credit Scheme",
-        indicative_amount: "Up to ₹50,000 at 5% Concessional Interest",
-        status: "Verification Required",
-        condition: "Requires project feasibility endorsement by Financial Counsellor."
-      },
-      {
-        scheme_name: "MUDRA Shishu Loan",
-        indicative_amount: "Up to ₹50,000 collateral-free",
-        status: "Alternative Bank Linkage",
-        condition: "Commercial bank credit linkage with active Aadhaar DBT account."
-      }
-    ],
-    literacy_checklist: [
-      { task: "Understand difference between revenue and profit", done: true },
-      { task: "Setup UPI Merchant QR code (PhonePe/GPay for shop)", done: true },
-      { task: "Weekly physical cashbook logging", done: false },
-      { task: "Separate personal household expenses from shop account", done: false }
-    ],
-    truth_state: "DEMO_DATA"
-  });
+  const [enterpriseCase, setEnterpriseCase] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     const fetchPlan = async () => {
-      setLoading(true);
+      setLoading(true); setError("");
       try {
-        const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
-        const idToFetch = storedId || "demo-beneficiary-id";
+        const cases = await getCases();
+        if (!cases.length) throw new Error("No authorized enterprise case is assigned.");
+        const idToFetch = cases[0].beneficiary_id;
         const data = await getEnterprisePlan(idToFetch);
         if (data) {
           setEnterpriseCase(data);
         }
       } catch (err) {
-        console.warn("Using default enterprise case:", err);
+        setError(err instanceof Error ? err.message : "Enterprise plan unavailable.");
       } finally {
         setLoading(false);
       }
     };
     fetchPlan();
-  }, []);
+  }, [revision]);
 
+  if (loading) return <DataState title="Loading enterprise plan" message="Retrieving your authorized caseload…" />;
+  if (error || !enterpriseCase) return <DataState title="Enterprise plan unavailable" message={error || "No saved plan."} retry={() => setRevision(n => n + 1)} />;
   return (
     <div className="min-h-screen bg-[#fbfaf7] pb-12">
       <Navbar />
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <main id="main-content" className="workspace-main max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
             <div className="flex items-center gap-2">
@@ -175,10 +145,10 @@ export default function FinancialCounsellorPage() {
 
           <div className="mt-6 flex justify-end">
             <button
-              onClick={() => alert("वित्तीय शिफारस पत्र शासकीय बँकेसाठी तयार झाले आहे.")}
+              onClick={() => downloadDraft("enterprise-readiness-draft", enterpriseCase, enterpriseCase.truth_state || "UNKNOWN")}
               className="px-6 py-2.5 bg-[#0f4c81] text-white text-xs font-bold rounded-xl hover:bg-[#0c3c66] transition-colors shadow-sm"
             >
-              वित्तीय तयारी प्रमाणपत्र जारी करा (Issue Readiness Certificate)
+              वित्तीय तयारी मसुदा डाउनलोड करा (Download Readiness Draft · JSON)
             </button>
           </div>
         </div>

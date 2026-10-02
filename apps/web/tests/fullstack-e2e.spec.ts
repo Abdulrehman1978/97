@@ -104,6 +104,12 @@ test.describe('True Full-Stack Integrated E2E Suite', () => {
   });
 
   test('4. Pathways & Counterfactual: Interactive Recalculation', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('#username').fill('ramesh@beneficiary.lip');
+    await page.locator('#password').fill('ramesh123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/interview');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('lip_beneficiary_id'))).toBeTruthy();
     await page.goto('/pathways');
 
     // Assert recommended pathways load

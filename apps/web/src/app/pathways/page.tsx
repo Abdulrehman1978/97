@@ -7,7 +7,7 @@ import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { LivingPathway } from "@/components/LivingPathway";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { TruthBadge } from "@/components/TruthBadge";
-import { selectPathway, getRecommendations, exploreCounterfactual } from "@/lib/api";
+import { selectPathway, getRecommendations, exploreCounterfactual, getLivelihoodPassport } from "@/lib/api";
 import { Compass, Sparkles, Filter, Sliders, RefreshCw, AlertCircle } from "lucide-react";
 
 export default function PathwaysPage() {
@@ -20,68 +20,7 @@ export default function PathwaysPage() {
   const [workPref, setWorkPref] = useState<string>("hybrid");
   const [requiresWheelchair, setRequiresWheelchair] = useState<boolean>(false);
 
-  const defaultSeedPathways = [
-    {
-      qualification_title: "Automotive Two Wheeler Service Technician",
-      qp_code: "ASC/Q1411",
-      nsqf_level: 4,
-      pathway_type: "wage_fit_now",
-      fit_band: "Strong current-skill fit (सर्वोत्तम जुळणी)",
-      overall_score: 0.89,
-      factor_scores: {
-        skill_transfer: 0.85,
-        travel_mobility_fit: 0.95,
-        local_demand_evidence: 0.90,
-        preference_alignment: 0.88
-      },
-      explanation_beneficiary: "हा मार्ग तुमच्या 3 वर्षांच्या गॅरेज अनुभवावर आधारित आहे. हिंगणा एमआयडीसी ऑटोमोबाईल क्लस्टरमध्ये या कौशल्याची मोठी मागणी असून 12 किमी अंतरावर पीएम-अजय अंतर्गत मोफत शासकीय बॅच सुरू आहे.",
-      training_center_nearby: "Nagpur Central Livelihood Center (Hingna)",
-      distance_km: 11.5,
-      has_live_batch: true,
-      batch_code: "PM-AJAY-NAG-2026-B1",
-      truth_state: "DEMO_DATA"
-    },
-    {
-      qualification_title: "Independent Workshop & Micro-Enterprise Owner",
-      qp_code: "ASC/Q1411-ENT",
-      nsqf_level: 4,
-      pathway_type: "self_employment_pathway",
-      fit_band: "Viable micro-enterprise route (व्यवसाय मार्ग)",
-      overall_score: 0.84,
-      factor_scores: {
-        skill_transfer: 0.80,
-        travel_mobility_fit: 1.0,
-        local_demand_evidence: 0.85,
-        preference_alignment: 0.95
-      },
-      explanation_beneficiary: "स्वतःचे दुकान सुरू करण्यासाठी हा मार्ग उपयुक्त आहे. यामध्ये 100% मोफत तांत्रिक कौशल्य आणि पीएम-अजय अंतर्गत Rs. 50,000 पर्यंत बिनव्याजी साधन अनुदान (Tool Asset Grant) उपलब्ध होऊ शकते.",
-      training_center_nearby: "District Skill Center, Nagpur",
-      distance_km: 8.0,
-      has_live_batch: true,
-      batch_code: "PM-AJAY-ENT-2026",
-      truth_state: "DEMO_DATA"
-    },
-    {
-      qualification_title: "Solar Photovoltaic Rooftop Installer (Suryamitra)",
-      qp_code: "SGJ/Q0101",
-      nsqf_level: 4,
-      pathway_type: "growth_pathway",
-      fit_band: "High-growth vocational trajectory (भविष्यातील मागणी)",
-      overall_score: 0.78,
-      factor_scores: {
-        skill_transfer: 0.65,
-        travel_mobility_fit: 0.85,
-        local_demand_evidence: 0.92,
-        preference_alignment: 0.75
-      },
-      explanation_beneficiary: "नागपूर विभागात सौर ऊर्जेच्या कामात वेगाने वाढ होत आहे. तुमच्या 10वी शिक्षणावर हा अभ्यासक्रम पूर्ण करता येईल. विद्युत वायरिंगचा अधिक सराव या कोर्समध्ये दिला जाईल.",
-      training_center_nearby: "Green Jobs Academy, Butibori",
-      distance_km: 18.0,
-      has_live_batch: false,
-      batch_code: "Catalogue Discovery",
-      truth_state: "DEMO_DATA"
-    }
-  ];
+  const [error, setError] = useState("");
 
   const loadRecommendations = async () => {
     setLoading(true);
@@ -92,11 +31,11 @@ export default function PathwaysPage() {
       if (res && res.pathways && res.pathways.length > 0) {
         setPathways(res.pathways);
       } else {
-        setPathways(defaultSeedPathways);
+        setPathways([]);
       }
     } catch (e: any) {
-      console.warn("Recommendations API fetch error, using resilient seed:", e);
-      setPathways(defaultSeedPathways);
+      setError(e.message || "Recommendations unavailable.");
+      setPathways([]);
     } finally {
       setLoading(false);
     }
@@ -109,13 +48,16 @@ export default function PathwaysPage() {
   const handleRecalculateCounterfactual = async (newRadius: number, newPref: string, newWheelchair: boolean) => {
     setLoading(true);
     try {
+      const storedId = localStorage.getItem("lip_beneficiary_id");
+      if (!storedId) throw new Error("Sign in and save a profile before exploring alternatives.");
+      const passport = await getLivelihoodPassport(storedId);
       const baseProfile = {
-        education: { highest_level: "class_10" },
+        ...passport.profile,
         mobility: { max_travel_distance_km: newRadius },
         work_preferences: { wage_vs_self_employment: newPref },
         accessibility: { requires_wheelchair_access: newWheelchair }
       };
-      const candidateSkills = ["sk-engine-1", "sk-brake-1"];
+      const candidateSkills = passport.skills.map((skill: {skill_id: string}) => skill.skill_id);
       const res = await exploreCounterfactual({
         base_profile: baseProfile,
         candidate_skill_ids: candidateSkills,
@@ -124,7 +66,7 @@ export default function PathwaysPage() {
           work_preference: newPref,
           wheelchair_accessible: newWheelchair
         },
-        district_code: "MH-NAG"
+        district_code: passport.district_code
       });
 
       if (res && res.delta_explanation) {
@@ -135,29 +77,23 @@ export default function PathwaysPage() {
         const mapped = res.feasible_options.map((opt: any) => ({
           qualification_title: opt.qualification_title,
           qp_code: opt.qp_code,
-          nsqf_level: opt.nsqf_level || 4,
+          nsqf_level: opt.nsqf_level,
           pathway_type: newPref === "self_employment" ? "self_employment_pathway" : "wage_fit_now",
           fit_band: opt.fit_band || "Feasible Under Modified Constraints",
-          overall_score: opt.new_score || 0.85,
-          factor_scores: {
-            travel_mobility_fit: opt.feasibility_change === "unlocked_by_distance" ? 0.98 : 0.85,
-            skill_transfer: 0.85,
-            local_demand_evidence: 0.90,
-            preference_alignment: 0.90
-          },
+          overall_score: opt.new_score,
+          factor_scores: opt.factor_scores || {},
           explanation_beneficiary: opt.reason || `प्रवास मर्यादा ${newRadius} किमी केल्यामुळे हा पर्याय उपलब्ध झाला आहे.`,
-          training_center_nearby: "Hingna / Nagpur Training Center",
-          distance_km: newRadius <= 10 ? 8.0 : (newRadius <= 15 ? 12.0 : 21.0),
-          has_live_batch: true,
-          batch_code: "PM-AJAY-NAG-2026-B1",
-          truth_state: "LIVE"
+          training_center_nearby: opt.training_center_nearby,
+          distance_km: opt.distance_km,
+          has_live_batch: false,
+          truth_state: "SANDBOX"
         }));
         setPathways(mapped);
       } else {
         loadRecommendations();
       }
     } catch (e: any) {
-      console.warn("Counterfactual recalculation error:", e);
+      setError(e.message || "Recalculation failed. Previous results are unchanged.");
     } finally {
       setLoading(false);
     }
@@ -167,11 +103,12 @@ export default function PathwaysPage() {
     try {
       const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
       const idToUse = storedId || "demo-beneficiary-id";
-      await selectPathway(idToUse, pathway.qualification_title, pathway.pathway_type);
+      const result = await selectPathway(idToUse, pathway.qualification_title, pathway.pathway_type);
+      if (result.is_offline) { setError("Selection queued offline, not yet saved. Reconnect before continuing."); return; }
+      router.push("/journey");
     } catch (e) {
-      console.warn("Using local path selection fallback:", e);
+      setError(e instanceof Error ? e.message : "Pathway was not saved.");
     }
-    router.push("/journey");
   };
 
   const filteredPathways = filterType === "all"
@@ -183,7 +120,8 @@ export default function PathwaysPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main id="main-content" className="workspace-main max-w-4xl mx-auto px-4 py-6">
+        {error && <p role="alert" className="p-4 bg-red-50 text-red-900">{error}</p>}
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
@@ -194,10 +132,10 @@ export default function PathwaysPage() {
               <TruthBadge state="LIVE" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
-              तुमच्यासाठी सुचवलेले ३ उपजीविका मार्ग
+              तुमच्यासाठी सुचवलेले उपजीविका मार्ग
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              तुमचे कौशल्य, {travelRadius} किमी प्रवास मर्यादा आणि नागपूर जिल्ह्यातील रोजगार मागणीनुसार प्रमाणित.
+              {pathways.length} options · recommendations, not verified placements. Review fit and confirm availability.
             </p>
           </div>
 
@@ -210,11 +148,11 @@ export default function PathwaysPage() {
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-blue-600" />
               <h2 className="text-sm font-bold text-slate-900">
-                Live Counterfactual Explorer (मार्ग फेरबदल सिम्युलेटर)
+                Counterfactual Explorer (मार्ग फेरबदल सिम्युलेटर)
               </h2>
             </div>
             <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-              Deterministic Real-Time Recalculation
+              What-if simulation · not a saved profile change
             </span>
           </div>
 

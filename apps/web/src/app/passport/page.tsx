@@ -77,28 +77,28 @@ export default function PassportPage() {
 
       const apiPassport = await getLivelihoodPassport(storedId);
       setPassportData({
-        beneficiary_name: apiPassport.full_name || DEMO_SEED.beneficiary_name,
+        beneficiary_name: apiPassport.full_name || "Name not recorded",
         district: `${apiPassport.district_code || "MH-NAG"} (MH)`,
-        primary_trade: "Two-Wheeler Maintenance & Service",
-        qr_code_token: apiPassport.qr_code_token || DEMO_SEED.qr_code_token,
+        primary_trade: "Your recorded skill evidence",
+        qr_code_token: apiPassport.qr_code_token || null,
         skills: apiPassport.skills && apiPassport.skills.length > 0
           ? apiPassport.skills.map((s: any) => ({
               name: s.canonical_name,
               category: s.category,
               level: s.proficiency_band === "competent" ? "Competent" : "Bridge Needed",
-              confidence: Math.round((s.confidence_score || 0.9) * 100),
-              status: s.verification_status === "beneficiary_confirmed" ? "Verified" : "Pending"
+              confidence: Math.round((s.confidence_score ?? 0) * 100),
+              status: s.verification_status === "beneficiary_confirmed" ? "Self-confirmed" : s.verification_status || "Pending"
             }))
-          : DEMO_SEED.skills,
+          : [],
         experience: apiPassport.work_experiences && apiPassport.work_experiences.length > 0
           ? {
               title: apiPassport.work_experiences[0].title,
-              duration: `${apiPassport.work_experiences[0].duration_months || 36} Months`,
-              tasks: apiPassport.work_experiences[0].tasks || ["इंजिन उघडणे", "ब्रेक काम"],
-              tools: apiPassport.work_experiences[0].tools || ["Spanners", "Wrench"]
+              duration: apiPassport.work_experiences[0].duration_months > 0 ? `${apiPassport.work_experiences[0].duration_months} Months` : "Duration not recorded",
+              tasks: apiPassport.work_experiences[0].tasks || [],
+              tools: apiPassport.work_experiences[0].tools || []
             }
-          : DEMO_SEED.experience,
-        rpl: DEMO_SEED.rpl
+          : { title: "No work experience recorded", duration: "Not recorded", tasks: [], tools: [] },
+        rpl: null
       });
     } catch (e: any) {
       if (IS_DEMO_MODE) {
@@ -137,7 +137,7 @@ export default function PassportPage() {
       <div className="min-h-screen bg-[#fbfaf7]">
         <Navbar />
         <BeneficiaryNav />
-        <main className="max-w-2xl mx-auto px-4 py-12">
+        <main id="main-content" className="workspace-main max-w-2xl mx-auto px-4 py-12">
           <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center space-y-4">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
             <h2 className="font-bold text-slate-900">Passport Unavailable</h2>
@@ -161,7 +161,7 @@ export default function PassportPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main id="main-content" className="workspace-main max-w-4xl mx-auto px-4 py-6">
         {/* Header with Title and QR Reference */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
           <div>
@@ -175,15 +175,15 @@ export default function PassportPage() {
               उपजीविका पासपोर्ट (Livelihood Passport)
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              नाव: {passportData.beneficiary_name} • जिल्हा: {passportData.district} • टोकन: LIP-MH-NAG-2026
+              नाव: {passportData.beneficiary_name} • जिल्हा: {passportData.district}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <ReadAloudButton text="हा तुमचा उपजीविका पासपोर्ट आहे. तुम्ही सांगितलेले काम आणि कौशल्य येथे प्रमाणित केले आहे." />
+            <ReadAloudButton text="हा तुमचा उपजीविका पासपोर्ट आहे. येथे तुमचे नोंदवलेले काम आणि कौशल्य आहेत. ही अधिकृत प्रमाणपत्रे नाहीत." />
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700">
               <QrCode className="w-4 h-4 text-slate-600" />
-              <span>QR Verified</span>
+              <span>Skill record · not a certificate</span>
             </div>
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function PassportPage() {
                 : "text-slate-500 hover:text-slate-900"
             }`}
           >
-            प्रमाणित कौशल्ये (Verified Skills)
+            नोंदवलेली कौशल्ये (Recorded Skills)
           </button>
           <button
             onClick={() => setActiveTab("rpl")}
@@ -252,44 +252,7 @@ export default function PassportPage() {
         )}
 
         {/* RPL Tab Content */}
-        {activeTab === "rpl" && (
-          <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-800">
-                <Award className="w-7 h-7" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
-                  Recognition of Prior Learning (RPL)
-                </span>
-                <h2 className="text-lg font-bold text-slate-900">
-                  तुम्ही थेट RPL प्रमाणपत्रासाठी पात्र आहात!
-                </h2>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              तुमच्याकडे <strong>{passportData.rpl.experience_months} महिन्यांचा</strong> प्रत्यक्ष गॅरेज अनुभव असल्याने, 
-              तुम्हाला ४५० तासांचा नवशिका वर्ग करण्याची आवश्यकता नाही. फक्त ३० तासांचे तांत्रिक ब्रीज प्रशिक्षण पूर्ण करून 
-              तुम्ही अधिकृत NSQF Level 4 प्रमाणपत्र मिळवू शकता.
-            </p>
-
-            <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80 space-y-2 text-xs">
-              <div className="flex justify-between font-medium text-slate-700">
-                <span>संबंधित पद:</span>
-                <span className="font-bold text-slate-900">{passportData.rpl.matched_qualification}</span>
-              </div>
-              <div className="flex justify-between font-medium text-slate-700">
-                <span>कौशल्य जुळणी (Competency Match):</span>
-                <span className="font-bold text-emerald-700">{passportData.rpl.match_pct}%</span>
-              </div>
-              <div className="flex justify-between font-medium text-slate-700">
-                <span>आवश्यक ब्रीज मॉड्युल:</span>
-                <span className="font-bold text-slate-900">इलेक्ट्रिकल वायरिंग व डायग्नोस्टिक्स ({passportData.rpl.bridge_hours} तास)</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === "rpl" && <section className="bg-white p-6 rounded-3xl border border-slate-200"><h2 className="text-lg font-semibold">Recognition of Prior Learning</h2><p className="mt-3 text-slate-600">Your recorded skills can support an assessment. Eligibility, bridge training and certification must be confirmed for a selected qualification by an authorized assessment centre. This passport is not a certificate.</p><Link href="/pathways" className="inline-block mt-4 underline">Explore qualifications →</Link></section>}
 
         {/* Experience Tab Content */}
         {activeTab === "experience" && (

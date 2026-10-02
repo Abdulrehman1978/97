@@ -32,7 +32,13 @@ test.describe('Role & Authorization Boundaries', () => {
   });
 
   test('employer workspace strictly maintains candidate privacy notice', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('#username').fill('employer@mahavitaran.com');
+    await page.locator('#password').fill('employer123');
+    await page.locator('button[type="submit"]').click();
+    await page.waitForURL('**/interview');
     await page.goto('/employer');
+    await expect(page.locator('h1')).toBeVisible();
     const pageText = await page.locator('body').innerText();
     expect(pageText).toMatch(/Employer|Candidate|Requisition|Privacy/i);
     // Explicit assertion that caste identity is never asked or displayed

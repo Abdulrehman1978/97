@@ -1,7 +1,7 @@
 // PM-AJAY Livelihood Intelligence Platform (LIP) - Service Worker
 // Offline Caching for Low-Connectivity & Village Field Use
 
-const CACHE_NAME = "lip-pwa-v1";
+const CACHE_NAME = "lip-public-shell-v2";
 const STATIC_ASSETS = [
   "/",
   "/interview",
@@ -43,6 +43,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   // Network first, falling back to cache if offline
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  // Never retain private API responses, credentials, or professional pages on shared phones.
+  if (url.origin !== self.location.origin || event.request.headers.has("authorization") ||
+      url.pathname.startsWith("/api/") ||
+      !((STATIC_ASSETS.includes(url.pathname) && !url.search) || url.pathname.startsWith("/_next/static/"))) return;
 
   event.respondWith(
     fetch(event.request)
@@ -64,8 +69,9 @@ self.addEventListener("fetch", (event) => {
           }
           // Default fallback for html navigation
           if (event.request.headers.get("accept")?.includes("text/html")) {
-            return caches.match("/interview");
+            return new Response("Offline: reconnect to open this page.", {status: 503, headers: {"Content-Type": "text/plain; charset=utf-8"}});
           }
+          return Response.error();
         });
       })
   );

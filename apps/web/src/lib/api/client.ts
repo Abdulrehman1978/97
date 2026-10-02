@@ -27,6 +27,8 @@ export function clearStoredToken(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("lip_beneficiary_id");
+    localStorage.removeItem("lip_beneficiary_id_state");
   } catch (e) {
     console.warn("Failed to clear auth token", e);
   }
@@ -84,13 +86,15 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
 
     if (isNetworkOrAbort) {
       // If an offline-capable mutation was requested, queue it instead of failing silently
-      if (options.offlineOperation && options.method && options.method !== "GET") {
+      // Only state-setting PUTs are safe to replay without server idempotency keys.
+      // POST outcomes are ambiguous after a timeout and must not be duplicated.
+      if (options.offlineOperation && options.method === "PUT" && getStoredToken()) {
         const payload = options.offlinePayload || (options.body ? JSON.parse(options.body as string) : {});
         const queued = enqueueMutation(options.offlineOperation, endpoint, options.method, payload);
         return {
           status: "offline_queued",
           client_mutation_id: queued.client_mutation_id,
-          message: "Network unavailable. Saved offline — will synchronize when reconnected.",
+          message: "Network unavailable. Queued on this device — not yet committed to the server.",
           is_offline: true
         } as unknown as T;
       }

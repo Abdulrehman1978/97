@@ -100,7 +100,7 @@ def get_current_user_optional(
         return None
     # Support isolated judge demo tokens ONLY when DEMO_MODE is True
     if str(sub).startswith("demo-"):
-        if not settings.DEMO_MODE:
+        if not settings.DEMO_MODE or settings.ENVIRONMENT.lower() == "production":
             return None
         role = payload.get("role", "beneficiary")
         user = User(
@@ -138,11 +138,10 @@ def get_current_user(
 def require_roles(*allowed_roles: str):
     """Enforce endpoint authorization by role."""
     def role_checker(user: Any = Depends(get_current_user)) -> Any:
-        if user.role not in allowed_roles and "ministry_admin" not in user.role:
+        if user.role not in allowed_roles and user.role != "ministry_admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Forbidden: role '{user.role}' is not authorized for this resource"
             )
         return user
     return role_checker
-
