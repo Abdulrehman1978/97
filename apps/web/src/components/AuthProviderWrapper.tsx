@@ -1,11 +1,17 @@
 "use client";
 
 import { AuthProvider } from "@/lib/api/auth-context";
+import { LanguageProvider } from "@/lib/language-context";
 
 /**
- * Thin client-component wrapper so the server-side RootLayout can import it.
- * The AuthProvider uses localStorage / browser APIs so it must be "use client".
+ * Client-component wrapper providing auth and localization context across all routes.
  */
 export function AuthProviderWrapper({ children }: { children: React.ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>;
+  return (
+    <AuthProvider>
+      <LanguageProvider>
+        {children}
+      </LanguageProvider>
+    </AuthProvider>
+  );
 }

@@ -1,20 +1,41 @@
 "use client";
 
-import React, { useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Volume2, VolumeX, PauseCircle } from "lucide-react";
+import { useLanguage } from "@/lib/language-context";
 
 interface ReadAloudProps {
   text: string;
   lang?: string; // "mr-IN", "hi-IN", "en-IN"
   className?: string;
+  label?: string;
+  size?: "sm" | "md" | "lg";
 }
 
-export function ReadAloudButton({ text, lang = "mr-IN", className = "" }: ReadAloudProps) {
+export function ReadAloudButton({ text, lang, className = "", label, size = "md" }: ReadAloudProps) {
+  const { locale } = useLanguage();
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSupported, setIsSupported] = useState(true);
+
+  const effectiveLang = lang || (locale === "mr" ? "mr-IN" : locale === "hi" ? "hi-IN" : "en-IN");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsSupported("speechSynthesis" in window);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Cleanup any active utterance if component unmounts
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const toggleSpeak = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      alert("Text-to-speech is not supported on this browser.");
+    if (!isSupported) {
       return;
     }
 
@@ -24,10 +45,13 @@ export function ReadAloudButton({ text, lang = "mr-IN", className = "" }: ReadAl
       return;
     }
 
-    window.speechSynthesis.cancel(); // Clear any queued utterances
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
-    utterance.rate = 0.9; // Slightly slower for low-literacy comprehension
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/<[^>]*>?/gm, "").trim();
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = effectiveLang;
+    utterance.rate = 0.9; // deliberate pace for clear field comprehension
 
     utterance.onend = () => setIsPlaying(false);
     utterance.onerror = () => setIsPlaying(false);
@@ -36,15 +60,39 @@ export function ReadAloudButton({ text, lang = "mr-IN", className = "" }: ReadAl
     setIsPlaying(true);
   };
 
+  if (!isSupported) {
+    return null;
+  }
+
+  const defaultLabel = isPlaying
+    ? locale === "mr"
+      ? "थांबवा"
+      : locale === "hi"
+      ? "रोकें"
+      : "Stop"
+    : locale === "mr"
+    ? "ऐका / Listen"
+    : locale === "hi"
+    ? "सुनें / Listen"
+    : "Listen";
+
   return (
     <button
       onClick={toggleSpeak}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 transition-colors touch-target ${className}`}
+      type="button"
+      className={`min-h-[44px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high/90 text-primary font-label-sm text-label-sm active:bg-surface-container-highest transition-colors backdrop-blur-xs ${
+        isPlaying ? "ring-2 ring-secondary text-secondary" : ""
+      } ${className}`}
       title={isPlaying ? "Stop Audio" : "Listen (Read Aloud)"}
-      aria-label={isPlaying ? "Stop speech" : "Read aloud"}
+      aria-label={isPlaying ? "Stop speech" : "Read aloud instructions"}
+      aria-pressed={isPlaying}
     >
-      {isPlaying ? <VolumeX className="w-3.5 h-3.5 text-red-600 animate-pulse" /> : <Volume2 className="w-3.5 h-3.5 text-sky-700" />}
-      <span>{isPlaying ? "थांबवा (Stop)" : "ऐका (Listen)"}</span>
+      {isPlaying ? (
+        <PauseCircle className="w-4 h-4 text-secondary animate-pulse" />
+      ) : (
+        <Volume2 className="w-4 h-4 text-secondary" />
+      )}
+      <span>{label || defaultLabel}</span>
     </button>
   );
 }

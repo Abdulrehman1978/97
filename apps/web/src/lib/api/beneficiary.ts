@@ -10,6 +10,7 @@ export interface CreateBeneficiaryPayload {
   gender?: string;
   age?: number;
   primary_language?: string;
+  confirmed_transcript?: string;
   profile_data?: Record<string, any>;
 }
 
