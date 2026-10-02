@@ -1,9 +1,9 @@
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
-from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, WorkExperience, BeneficiarySkill
+from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, WorkExperience, BeneficiarySkill, SkillEvidence
 from backend.app.knowledge.models import Skill
 from backend.app.identity.models import User
 from backend.app.identity.policies import (
@@ -90,6 +90,29 @@ class CreateBeneficiaryRequest(BaseModel):
     age: Optional[int] = None
     primary_language: str = "mr"
     profile_data: Optional[Dict[str, Any]] = None
+    confirmed_transcript: Optional[str] = Field(default=None, max_length=12000)
+
+
+def persist_confirmed_evidence(db: Session, ben: Beneficiary, transcript: Optional[str]):
+    """Persist server-derived, self-confirmed evidence; never fabricate certification."""
+    if not transcript or not transcript.strip():
+        return
+    from backend.app.intelligence.extractor import extract_structured_livelihood_profile
+    result = extract_structured_livelihood_profile(transcript, ben.primary_language)
+    for item in result.get("extracted_skills", []):
+        skill_id = item.get("skill_id")
+        if not skill_id or not db.get(Skill, skill_id):
+            continue
+        record = db.query(BeneficiarySkill).filter_by(beneficiary_id=ben.id, skill_id=skill_id).first()
+        if not record:
+            record = BeneficiarySkill(beneficiary_id=ben.id, skill_id=skill_id, confidence_score=item.get("confidence", 0), verification_status="beneficiary_confirmed", evidence_utterance=transcript)
+            db.add(record)
+            db.flush()
+        evidence = db.query(SkillEvidence).filter_by(beneficiary_skill_id=record.id, description=transcript).first()
+        if not evidence:
+            db.add(SkillEvidence(beneficiary_skill_id=record.id, evidence_type="spoken_task_description", description=transcript))
+    if not db.query(WorkExperience).filter_by(beneficiary_id=ben.id, raw_utterance=transcript).first():
+        db.add(WorkExperience(beneficiary_id=ben.id, title="Self-reported work experience", duration_months=0, raw_utterance=transcript, tasks_performed=result.get("tasks_detected", []), tools_used=result.get("tools_detected", [])))
 
 class UpdateProfileRequest(BaseModel):
     education: Optional[Dict[str, Any]] = None
@@ -183,7 +206,7 @@ def get_my_beneficiary_profile(
 def create_beneficiary(
     req: CreateBeneficiaryRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[Any] = Depends(get_current_user_optional)
+    current_user: Any = Depends(get_current_user)
 ):
     """
     Create or register a new beneficiary aggregate.
@@ -191,12 +214,24 @@ def create_beneficiary(
     Does NOT manufacture fake default values for real citizens.
     """
     user_id_to_link: Optional[str] = None
+    if current_user.role not in ["beneficiary", "field_worker", "counsellor", "district_admin", "state_admin", "ministry_admin"]:
+        raise HTTPException(status_code=403, detail="Role cannot register beneficiaries")
     if current_user and current_user.role == "beneficiary":
+        if str(current_user.id).startswith("demo-"):
+            raise HTTPException(status_code=409, detail="Sign in with a beneficiary account to save a profile")
+        # Serialize repeated saves for this identity, without changing existing schema.
+        db.query(User).filter(User.id == current_user.id).with_for_update().first()
+        existing = db.query(Beneficiary).filter(Beneficiary.user_id == current_user.id).first()
+        if existing:
+            if not existing.profile:
+                existing.profile = BeneficiaryProfile(beneficiary_id=existing.id)
+            for key in ("education", "aspirations", "work_preferences", "mobility", "accessibility"):
+                if key in (req.profile_data or {}):
+                    setattr(existing.profile, key, req.profile_data[key])
+            persist_confirmed_evidence(db, existing, req.confirmed_transcript)
+            db.commit()
+            return {"id": existing.id, "user_id": existing.user_id, "full_name": existing.full_name, "district_code": existing.district_code}
         user_id_to_link = current_user.id
-    elif req.phone:
-        matched_user = db.query(User).filter(User.phone == req.phone).first()
-        if matched_user:
-            user_id_to_link = matched_user.id
 
     ben = Beneficiary(
         user_id=user_id_to_link,
@@ -221,6 +256,7 @@ def create_beneficiary(
         accessibility=profile_data.get("accessibility", {"requires_wheelchair_access": None, "has_mobility_impairment": None})
     )
     db.add(prof)
+    persist_confirmed_evidence(db, ben, req.confirmed_transcript)
     db.commit()
     db.refresh(ben)
 

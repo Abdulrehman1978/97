@@ -9,6 +9,8 @@ from backend.app.intelligence.rpl import evaluate_rpl_readiness
 from backend.app.intelligence.counterfactuals import evaluate_counterfactuals
 from backend.app.intelligence.rag import query_policy_rag
 from backend.app.beneficiary.models import Beneficiary, BeneficiaryProfile, BeneficiarySkill
+from backend.app.shared.security import get_current_user_optional
+from backend.app.beneficiary.router import check_beneficiary_pre_access, check_beneficiary_access
 
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 
@@ -44,16 +46,20 @@ def extract_voice_interview(req: VoiceExtractRequest):
     return extract_structured_livelihood_profile(req.transcript, req.language)
 
 @router.post("/recommend")
-def get_recommendations(req: RecommendRequest, db: Session = Depends(get_db)):
+def get_recommendations(req: RecommendRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user_optional)):
     """Computes transparent, constraint-aware pathway recommendations."""
     profile_data = req.profile or {}
     skill_ids = req.skill_ids or []
     district_code = req.district_code
 
     if req.beneficiary_id:
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Sign in to use a saved beneficiary profile")
+        check_beneficiary_pre_access(current_user, req.beneficiary_id, db)
         ben = db.query(Beneficiary).filter(Beneficiary.id == req.beneficiary_id).first()
         if not ben:
             raise HTTPException(status_code=404, detail="Beneficiary not found")
+        check_beneficiary_access(current_user, ben, db)
         district_code = ben.district_code
         if ben.profile:
             profile_data = {

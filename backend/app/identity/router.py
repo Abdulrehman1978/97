@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -23,7 +23,7 @@ class ConsentRequest(BaseModel):
     language: str = "mr"
 
 class DemoSwitchRoleRequest(BaseModel):
-    role: str # beneficiary, field_worker, counsellor, financial_counsellor, provider, employer, district_admin
+    role: Literal["beneficiary", "field_worker", "counsellor", "financial_counsellor", "provider", "employer", "district_admin", "state_admin", "ministry_admin"]
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -105,7 +105,7 @@ def record_consent(
 @router.post("/demo/switch-role")
 def demo_switch_role(req: DemoSwitchRoleRequest):
     """SIH Judge & Demonstration utility to simulate switching active user roles."""
-    if not settings.DEMO_MODE:
+    if not settings.DEMO_MODE or settings.ENVIRONMENT.lower() == "production":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Demo role switcher is disabled in production mode"

@@ -1,6 +1,6 @@
 import json
 from typing import List, Union
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # Storage
     STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_PATH: str = "./data/storage"
+
+    @model_validator(mode="after")
+    def validate_production_security(self):
+        if self.ENVIRONMENT.lower() == "production":
+            if self.DEMO_MODE:
+                raise ValueError("Production cannot enable DEMO_MODE; use the explicit demo environment")
+            if len(self.SECRET_KEY) < 32 or self.SECRET_KEY.startswith(("lip-", "demo-")):
+                raise ValueError("Production requires a unique SECRET_KEY of at least 32 characters")
+        return self
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
