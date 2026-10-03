@@ -48,6 +48,8 @@ def test_create_and_update_application():
             ben = Beneficiary(id="test-b-1", full_name="Test Beneficiary Apps", phone="9222222299", district_code="MH-NAG")
             db.add(ben)
             db.commit()
+        ben.user_id = "test-b-1"
+        db.commit()
         opt = db.query(TrainingOption).first()
         if opt:
             training_opt_id = opt.id

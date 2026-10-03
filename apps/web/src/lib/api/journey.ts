@@ -1,7 +1,10 @@
 import { apiFetch } from "./client";
+import type { FieldCase, CoordinationReferral, EnterprisePlan, JourneyHome } from "./contracts";
 
 export const getJourneyHome = (beneficiary_id: string) =>
-  apiFetch<any>(`/api/v1/journey/${beneficiary_id}`);
+  apiFetch<JourneyHome>(`/api/v1/journey/${encodeURIComponent(beneficiary_id)}`);
+
+export const getMyJourney = () => apiFetch<JourneyHome>("/api/v1/journey/me");
 
 export const selectPathway = (
   beneficiary_id: string,
@@ -17,7 +20,7 @@ export const selectPathway = (
   });
 
 export const updateActionStatus = (action_id: string, status: string) =>
-  apiFetch<any>(`/api/v1/journey/actions/${action_id}`, {
+  apiFetch<{ status: "updated"; action_id: string; new_status: string }>(`/api/v1/journey/actions/${action_id}`, {
     method: "PUT",
     body: JSON.stringify({ status }),
     offlineOperation: "action_update",
@@ -44,7 +47,7 @@ export const counsellorOverride = (
   new_pathway_title: string,
   mandatory_reason: string
 ) =>
-  apiFetch<any>(`/api/v1/journey/cases/${case_id}/override`, {
+  apiFetch<{ status: "override_recorded"; case_id: string; audit_id: string }>(`/api/v1/journey/cases/${case_id}/override`, {
     method: "POST",
     body: JSON.stringify({
       counsellor_user_id,
@@ -57,10 +60,10 @@ export const counsellorOverride = (
   });
 
 export const getCases = (district_code = "MH-NAG") =>
-  apiFetch<any[]>(`/api/v1/journey/cases?district_code=${district_code}`);
+  apiFetch<FieldCase[]>(`/api/v1/journey/cases?district_code=${encodeURIComponent(district_code)}`);
 
 export const getCoordinationItems = () =>
-  apiFetch<any[]>("/api/v1/journey/coordination");
+  apiFetch<CoordinationReferral[]>("/api/v1/journey/coordination");
 
 export const updateCoordinationStatus = (referral_id: string, status: string, blocker_reason?: string) =>
   apiFetch<any>(`/api/v1/journey/coordination/${referral_id}/status`, {
@@ -69,7 +72,7 @@ export const updateCoordinationStatus = (referral_id: string, status: string, bl
   });
 
 export const getEnterprisePlan = (beneficiary_id: string) =>
-  apiFetch<any>(`/api/v1/journey/enterprise/${beneficiary_id}`);
+  apiFetch<EnterprisePlan | null>(`/api/v1/journey/enterprise/${encodeURIComponent(beneficiary_id)}`);
 
 export const recordOutcome = (data: {
   beneficiary_id: string;

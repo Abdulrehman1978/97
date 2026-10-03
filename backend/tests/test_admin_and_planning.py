@@ -49,7 +49,10 @@ def test_simulate_training_batch(admin_headers):
     assert "proposed_batch" in data
     assert data["verdict"] == "READY_FOR_HUMAN_REVIEW"
     assert "budget_breakdown_inr" in data
-    assert data["truth_state"] == "DEMO_DATA"
+    assert data["truth_state"] == "SANDBOX"
+    assert data["feasibility_assessment"]["potential_candidate_pool_in_radius"] is None
+    assert data["employer_linkages"] == []
+    assert "Illustrative" in data["budget_breakdown_inr"]["funding_component"]
 
 def test_generate_livelihood_proposal(admin_headers):
     """Verify generation of PM-AJAY GIA project proposal with evidence citations and budget."""
@@ -66,7 +69,9 @@ def test_generate_livelihood_proposal(admin_headers):
     assert data["project_title"] == "Nagpur Automotive Livelihood Project"
     assert data["proposal_status"] == "DRAFT_PROPOSAL_GENERATED"
     assert len(data["components"]) > 0
-    assert data["truth_state"] == "DEMO_DATA"
+    assert data["truth_state"] == "SANDBOX"
+    assert data["export_format"] == "JSON_DRAFT_ONLY"
+    assert data["kpis"] == {}
 
 def test_source_health_and_provenance(admin_headers):
     """Verify data sources, freshness SLA, and synchronization status are audited."""

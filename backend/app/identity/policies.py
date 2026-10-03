@@ -16,12 +16,6 @@ def is_beneficiary_owner(user: Optional[User], beneficiary: Optional[Beneficiary
         return False
     if beneficiary.user_id and beneficiary.user_id == user.id:
         return True
-    if beneficiary.id == user.id:
-        return True
-    if settings.DEMO_MODE:
-        # In isolated judge demo mode, accept demo session markers or matching synthetic IDs
-        if str(user.id).startswith("demo-") or beneficiary.id == "demo-beneficiary-id":
-            return True
     return False
 
 def get_user_jurisdictions(user: Optional[User], db: Optional[Session] = None) -> List[str]:
@@ -75,7 +69,7 @@ def can_view_beneficiary(
         user_jurisdictions = get_user_jurisdictions(user, db)
         if any(j == beneficiary.state_code or j.startswith(f"{beneficiary.state_code}-") for j in user_jurisdictions):
             return True
-        return getattr(user, "state_code", "MH") == beneficiary.state_code
+        return False
     if is_beneficiary_owner(user, beneficiary):
         return True
     if user.role in ["field_worker", "counsellor", "financial_counsellor", "district_admin"]:
@@ -119,6 +113,8 @@ def can_view_case(user: Optional[User], case: Any, db: Optional[Session] = None)
         return True
     if getattr(case, "assigned_to_user_id", None) == user.id:
         return True
+    if user.role == "state_admin" and getattr(case, "beneficiary", None):
+        return can_view_beneficiary(user, case.beneficiary, db)
     if user.role == "beneficiary":
         if hasattr(case, "beneficiary") and case.beneficiary:
             return is_beneficiary_owner(user, case.beneficiary)
@@ -127,7 +123,7 @@ def can_view_case(user: Optional[User], case: Any, db: Optional[Session] = None)
         if hasattr(case, "beneficiary") and case.beneficiary:
             user_jurisdictions = get_user_jurisdictions(user, db)
             return case.beneficiary.district_code in user_jurisdictions
-        return True
+        return False
     return False
 
 def can_manage_provider_batch(user: Optional[User], center_organization_id: str, db: Session) -> bool:
@@ -140,8 +136,6 @@ def can_manage_provider_batch(user: Optional[User], center_organization_id: str,
     if user.role in ["ministry_admin", "state_admin", "district_admin"]:
         return True
     if user.role == "provider":
-        if settings.DEMO_MODE and str(user.id).startswith("demo-"):
-            return True
         membership = db.query(Membership).filter(
             Membership.user_id == user.id,
             Membership.organization_id == center_organization_id
@@ -159,8 +153,6 @@ def can_manage_employer_opportunity(user: Optional[User], organization_id: str, 
     if user.role in ["ministry_admin", "state_admin", "district_admin"]:
         return True
     if user.role == "employer":
-        if settings.DEMO_MODE and str(user.id).startswith("demo-"):
-            return True
         membership = db.query(Membership).filter(
             Membership.user_id == user.id,
             Membership.organization_id == organization_id
@@ -187,13 +179,18 @@ def can_view_district_analytics(user: Optional[User], district_code: Optional[st
     """Admins, planners, and officials can view district demand/supply intelligence within allowed scope."""
     if not user:
         return False
-    if user.role in ["ministry_admin", "state_admin"]:
+    if user.role == "ministry_admin":
         return True
+    if user.role == "state_admin":
+        return bool(district_code) and any(
+            district_code == j or district_code.startswith(j + "-")
+            for j in get_user_jurisdictions(user, db)
+        )
     if user.role in ["district_admin", "counsellor", "financial_counsellor"]:
         if not district_code:
-            return True
+            return False
         user_jurisdictions = get_user_jurisdictions(user, db)
-        return district_code in user_jurisdictions or not user_jurisdictions
+        return district_code in user_jurisdictions
     return False
 
 def can_access_sensitive_field(user: Optional[User], field_name: str, purpose: str) -> bool:
@@ -211,4 +208,3 @@ def can_access_sensitive_field(user: Optional[User], field_name: str, purpose: s
             return user.role in ["district_admin", "state_admin", "ministry_admin", "field_worker", "counsellor"]
         return False
     return True
-

@@ -2,9 +2,9 @@ name: LIP Platform CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, v3]
   pull_request:
-    branches: [main]
+    branches: [main, v3]
 
 jobs:
   backend-test:
@@ -17,11 +17,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgrespassword
-          POSTGRES_DB: lip_db
+          POSTGRES_DB: lip_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -53,7 +53,7 @@ jobs:
 
       - name: Run Alembic Migrations against PostgreSQL
         env:
-          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_test
         run: |
           alembic upgrade head
           alembic current
@@ -61,7 +61,7 @@ jobs:
 
       - name: Seed Reference & Demo Data
         env:
-          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_test
           DEMO_MODE: "true"
         run: |
           python -m backend.scripts.seed_reference
@@ -69,7 +69,7 @@ jobs:
 
       - name: Run Pytest Test Suite
         env:
-          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_db
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/lip_test
           SECRET_KEY: test-secret-key-for-ci-minimum-32-chars-long
           DEMO_MODE: "true"
         run: |
@@ -126,7 +126,7 @@ jobs:
 
       - name: Start Live Full-Stack Containers
         run: |
-          docker compose up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
           for i in {1..30}; do
             if curl -sf http://localhost:8000/health/ready; then
               echo "Backend is ready!"
@@ -177,7 +177,10 @@ jobs:
         run: docker compose config
 
       - name: Start Docker Compose Stack
-        run: docker compose up -d --build
+        run: |
+          export SECRET_KEY="$(openssl rand -hex 48)"
+          echo "::add-mask::$SECRET_KEY"
+          docker compose up -d --build
 
       - name: Wait for Backend Health (Bounded Loop)
         run: |

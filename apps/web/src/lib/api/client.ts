@@ -1,5 +1,5 @@
 import { ApiError, NetworkError, AuthError } from "./errors";
-import { enqueueMutation, QueuedMutation } from "./offlineQueue";
+import type { QueuedMutation } from "./offlineQueue";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -83,17 +83,8 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
       error.message?.includes("NetworkError");
 
     if (isNetworkOrAbort) {
-      // If an offline-capable mutation was requested, queue it instead of failing silently
-      if (options.offlineOperation && options.method && options.method !== "GET") {
-        const payload = options.offlinePayload || (options.body ? JSON.parse(options.body as string) : {});
-        const queued = enqueueMutation(options.offlineOperation, endpoint, options.method, payload);
-        return {
-          status: "offline_queued",
-          client_mutation_id: queued.client_mutation_id,
-          message: "Network unavailable. Saved offline — will synchronize when reconnected.",
-          is_offline: true
-        } as unknown as T;
-      }
+      // These endpoints do not enforce idempotency keys. Never queue or report
+      // success for an unconfirmed POST; users must reconnect and check status.
 
       throw new NetworkError(`Server at ${API_BASE} is currently unreachable. Check connection.`);
     }

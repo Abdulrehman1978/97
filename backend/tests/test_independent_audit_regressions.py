@@ -9,12 +9,39 @@ from types import SimpleNamespace
 
 client = TestClient(app)
 
-def test_production_rejects_demo_and_known_secret():
+def test_production_rejects_demo_and_known_secret(monkeypatch):
+    # Ensure test is deterministic regardless of ambient CI environment variables
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+    # 1. Reject DEMO_MODE=True in production
     with pytest.raises(ValidationError):
         Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=True, SECRET_KEY="x" * 48)
+
+    # 2. Reject missing / ambient-free SECRET_KEY in production (falls back to default lip- key)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False)
-    assert not Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="x" * 48).DEMO_MODE
+
+    # 3. Reject empty SECRET_KEY
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="")
+
+    # 4. Reject default lip- prefix
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="lip-super-secret-key-development-minimum-32-chars-long")
+
+    # 5. Reject demo- prefix
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="demo-secret-key-for-testing-only-32-chars")
+
+    # 6. Reject short SECRET_KEY (< 32 chars)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="too-short")
+
+    # 7. Strong explicit key succeeds in production
+    prod_settings = Settings(_env_file=None, ENVIRONMENT="production", DEMO_MODE=False, SECRET_KEY="production-secure-key-verified-" + "a" * 32)
+    assert not prod_settings.DEMO_MODE
+    assert prod_settings.ENVIRONMENT == "production"
+
 
 def test_ministry_role_is_exact_not_substring():
     with pytest.raises(HTTPException) as error:

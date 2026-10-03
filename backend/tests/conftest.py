@@ -1,5 +1,14 @@
 import os
 import pytest
+from sqlalchemy.engine import make_url
+
+# Validate before importing the application: imports construct the DB engine.
+# Tests mutate fixtures and must never target the database serving the demo.
+test_database_url = os.environ.get("DATABASE_URL", "")
+test_database_name = make_url(test_database_url).database if test_database_url else ""
+if not test_database_name or "test" not in test_database_name.lower():
+    raise RuntimeError("Backend tests require an explicit DATABASE_URL for a dedicated test database (name must contain 'test').")
+
 from backend.app.database import engine, init_db, SessionLocal
 from backend.app.seed import seed_database
 from backend.app.identity.models import User
@@ -12,10 +21,7 @@ def setup_test_database():
     """Initialize all tables and official seed data before test session."""
     settings.DEMO_MODE = True
     init_db()
-    try:
-        seed_database()
-    except Exception:
-        pass
+    seed_database()
 
     db = SessionLocal()
     # Ensure any synthetic training options are labeled DEMO_DATA

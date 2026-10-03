@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.app.database import get_db
-from backend.app.journey.models import Pathway, PathwayAction, Case, CaseEvent, Grievance, Followup, Outcome
+from backend.app.journey.models import Pathway, PathwayAction, Case, CaseEvent, Referral, Grievance, Followup, Outcome
 from backend.app.beneficiary.models import Beneficiary
 from backend.app.opportunities.models import Application
 from backend.app.admin.models import AuditEvent
-from backend.app.identity.policies import is_beneficiary_owner
+from backend.app.identity.policies import is_beneficiary_owner, can_view_beneficiary, can_edit_beneficiary, can_view_case
+from backend.app.identity.models import Membership, Organization
 from backend.app.shared.security import get_current_user, require_roles
 from backend.app.config import settings
 
@@ -16,27 +17,27 @@ router = APIRouter(prefix="/journey", tags=["journey"])
 
 class SelectPathwayRequest(BaseModel):
     beneficiary_id: str
-    title: str
-    pathway_category: str = "wage_employment" # wage_employment, self_employment, rpl_certification
+    title: str = Field(min_length=3, max_length=240, pattern=r"\S")
+    pathway_category: Literal["wage_employment", "self_employment", "rpl_certification"] = "wage_employment" # wage_employment, self_employment, rpl_certification
     qualification_id: Optional[str] = None
 
 class UpdateActionRequest(BaseModel):
-    status: str # pending, in_progress, completed, skipped
+    status: Literal["pending", "in_progress", "completed", "skipped"]
 
 class CounsellorOverrideRequest(BaseModel):
     counsellor_user_id: Optional[str] = None
     original_recommendation_title: str
-    new_pathway_title: str
-    mandatory_reason: str
+    new_pathway_title: str = Field(min_length=3, max_length=240, pattern=r"\S")
+    mandatory_reason: str = Field(min_length=3, max_length=2000, pattern=r"\S")
 
 class SubmitGrievanceRequest(BaseModel):
     beneficiary_id: str
     category: str
-    title: str
-    description: str
+    title: str = Field(min_length=3, max_length=200, pattern=r"\S")
+    description: str = Field(min_length=10, max_length=4000, pattern=r"\S")
 
 class UpdateCoordinationStatusRequest(BaseModel):
-    status: str
+    status: Literal["pending", "acknowledged", "in_progress", "enrolled", "rejected", "completed", "escalated"]
     blocker_reason: Optional[str] = None
     notes: Optional[str] = None
 
@@ -66,6 +67,8 @@ def file_grievance(
     elif current_user.role in ["employer", "provider"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role to file beneficiary grievances")
 
+    if not can_edit_beneficiary(current_user, ben, db):
+        raise HTTPException(status_code=403, detail="Beneficiary is outside your authorized scope")
     g = Grievance(
         beneficiary_id=req.beneficiary_id,
         category=req.category,
@@ -84,32 +87,37 @@ def list_cases(
     current_user: Any = Depends(require_roles("field_worker", "counsellor", "financial_counsellor", "district_admin", "state_admin", "ministry_admin"))
 ):
     """List assigned cases for field workers and counsellors with jurisdiction scoping."""
-    if current_user.role in ["field_worker", "district_admin"]:
-        user_district = getattr(current_user, "district_code", None)
-        if user_district and district_code and user_district != district_code:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot access cases outside assigned district")
-        if user_district:
-            district_code = user_district
-
     cases = db.query(Case).all()
     res = []
     for c in cases:
         ben = c.beneficiary or db.query(Beneficiary).filter(Beneficiary.id == c.beneficiary_id).first()
-        if not ben or (district_code and ben.district_code != district_code):
+        if not ben or not can_view_case(current_user, c, db) or (district_code and ben.district_code != district_code):
             continue
         pathway = db.query(Pathway).filter(Pathway.beneficiary_id == ben.id, Pathway.status == "active").first()
+        ref = db.query(Referral).filter(Referral.case_id == c.id).order_by(Referral.created_at.desc()).first()
         res.append({
             "id": c.id,
             "beneficiary_id": ben.id,
             "beneficiary_name": ben.full_name,
-            "village": f"{ben.village_name or 'Central'}, {ben.block_name or 'Nagpur'}",
+            "village": ", ".join(x for x in [ben.village_name, ben.block_name] if x) or "Not recorded",
             "phone": ben.phone or "Not provided",
-            "current_rec": pathway.title if pathway else "Two-Wheeler Service Technician (Wage)",
+            "current_rec": pathway.title if pathway else None,
+            "blocker": ref.blocker_reason if (ref and ref.blocker_reason) else None,
+            "next_action": ref.purpose if (ref and ref.purpose) else ("Complete field intake assessment" if c.status == "open" else "Review pathway selection"),
             "status": c.status.replace("_", " ").title(),
-            "priority": c.priority,
+            "priority": c.priority.title() if c.priority else "Medium",
             "verified": ben.work_experiences[0].is_verified if (ben.work_experiences and len(ben.work_experiences) > 0) else False
         })
     return res
+
+def _can_access_referral(user, referral, db):
+    if user.role == "provider":
+        return bool(referral.target_organization_id) and db.query(Membership).filter(
+            Membership.user_id == user.id,
+            Membership.organization_id == referral.target_organization_id
+        ).first() is not None
+    return bool(referral.case) and can_view_case(user, referral.case, db)
+
 
 @router.get("/coordination")
 def list_coordination_items(
@@ -121,6 +129,8 @@ def list_coordination_items(
     referrals = db.query(Referral).all()
     items = []
     for r in referrals:
+        if not _can_access_referral(current_user, r, db):
+            continue
         c = r.case
         ben = None
         if c:
@@ -130,12 +140,13 @@ def list_coordination_items(
         sla = r.sla_due_date
         if sla is not None and sla.tzinfo is None:
             sla = sla.replace(tzinfo=timezone.utc)
-        days_remaining = (sla - now).days if sla else 3
+        days_remaining = (sla - now).days if sla else None
+        target = db.query(Organization).filter(Organization.id == r.target_organization_id).first() if r.target_organization_id else None
         items.append({
             "id": r.id,
             "beneficiary_name": ben.full_name if ben else "Beneficiary",
-            "from_dept": "District Skill Committee (DSC) Nagpur",
-            "to_dept": "Vidarbha Skills Academy (PIA)" if r.referral_type == "training_center" else "MPBCDC / Bank",
+            "from_dept": "Case team",
+            "to_dept": target.name if target else "Not assigned",
             "action_required": r.purpose,
             "sla_days_remaining": days_remaining,
             "status": r.status.replace("_", " ").title(),
@@ -155,6 +166,8 @@ def update_coordination_status(
     ref = db.query(Referral).filter(Referral.id == referral_id).first()
     if not ref:
         raise HTTPException(status_code=404, detail="Referral item not found")
+    if not _can_access_referral(current_user, ref, db):
+        raise HTTPException(status_code=403, detail="Referral is outside your authorized scope")
     ref.status = req.status
     if req.blocker_reason is not None:
         ref.blocker_reason = req.blocker_reason
@@ -167,42 +180,22 @@ def get_or_create_enterprise_plan(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user)
 ):
-    """Financial & Enterprise Counsellor: returns structured capital bands and pre-screened schemes."""
-    if current_user.role in ["employer", "provider"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for enterprise plans")
-    if current_user.role == "beneficiary":
-        if current_user.id != beneficiary_id and not (settings.DEMO_MODE and str(current_user.id).startswith("demo-")):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot access another beneficiary's enterprise plan")
-
+    """Read a saved enterprise draft. A GET never invents or creates a plan."""
     ben = db.query(Beneficiary).filter(Beneficiary.id == beneficiary_id).first()
     if not ben:
         raise HTTPException(status_code=404, detail="Beneficiary not found")
+    if not can_view_beneficiary(current_user, ben, db):
+        raise HTTPException(status_code=403, detail="Enterprise plan is outside your authorized scope")
 
     from backend.app.admin.models import EnterprisePlan
     plan = db.query(EnterprisePlan).filter(EnterprisePlan.beneficiary_id == beneficiary_id).first()
-
     if not plan:
-        plan = EnterprisePlan(
-            beneficiary_id=beneficiary_id,
-            activity_title="Two-Wheeler Service & Spare Parts Center",
-            sector="Automotive",
-            indicative_startup_capital_inr=75000,
-            indicative_working_capital_inr=25000,
-            assumed_break_even_months=6,
-            equipment_needed=["Hydraulic bike ramp", "Air compressor", "Comprehensive toolkit"],
-            target_customers=["Local village commuters", "Farmers with 2-wheelers"],
-            finance_schemes_considered=["PM-AJAY GIA Enterprise Subsidy", "NSFDC Term Loan", "MUDRA Shishu"],
-            status="draft"
-        )
-        db.add(plan)
-        db.commit()
-        db.refresh(plan)
-
+        return None
     return {
         "beneficiary_id": ben.id,
         "beneficiary_name": ben.full_name,
         "target_enterprise": plan.activity_title,
-        "district": f"{ben.district_code} (MH)",
+        "district": ben.district_code,
         "assumed_capital_needs": {
             "equipment_capex": plan.indicative_startup_capital_inr,
             "working_capital_opex": plan.indicative_working_capital_inr,
@@ -211,31 +204,20 @@ def get_or_create_enterprise_plan(
         },
         "scheme_prescreening": [
             {
-                "scheme_name": "PM-AJAY Grants-in-Aid (GIA) Asset Subsidy",
-                "indicative_amount": "Up to ₹50,000 (100% Grant)",
-                "status": "Potentially Relevant (Pre-screening)",
-                "condition": "SC candidate with verified income and NSQF L4 competency. Statutory sanction by DSC."
-            },
-            {
-                "scheme_name": "NSFDC Micro-Credit Scheme",
-                "indicative_amount": "Up to ₹50,000 at 5% Concessional Interest",
-                "status": "Recommended for Balance Working Capital",
-                "condition": "Requires project viability endorsement by Financial Counsellor."
-            },
-            {
-                "scheme_name": "MUDRA Shishu Loan",
-                "indicative_amount": "Up to ₹50,000 collateral-free",
-                "status": "Alternative Bank Credit Linkage",
-                "condition": "Commercial bank credit linkage with active Aadhaar DBT account."
+                "scheme_name": name,
+                "indicative_amount": "Not verified",
+                "status": "For counsellor review only",
+                "condition": "Verify current official eligibility and terms. No sanction or approval is implied."
             }
+            for name in (plan.finance_schemes_considered or [])
         ],
         "literacy_checklist": [
-            {"task": "Understand difference between revenue and profit", "done": True},
-            {"task": "Setup UPI Merchant QR code (PhonePe/GPay for shop)", "done": True},
-            {"task": "Weekly physical cashbook logging", "done": False},
-            {"task": "Separate personal household expenses from shop account", "done": False}
+            {"task": "Understand the difference between revenue and profit", "done": False},
+            {"task": "Record business income and expenses", "done": False},
+            {"task": "Separate household and business expenses", "done": False}
         ],
-        "truth_state": "DEMO_DATA"
+        "status": plan.status,
+        "truth_state": "DEMO_DATA" if settings.DEMO_MODE else "UNVERIFIED"
     }
 
 @router.post("/outcomes")
@@ -299,6 +281,8 @@ def get_beneficiary_journey_home(
         if not is_beneficiary_owner(current_user, ben):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot view another beneficiary's journey")
 
+    if not can_view_beneficiary(current_user, ben, db):
+        raise HTTPException(status_code=403, detail="Beneficiary is outside your authorized scope")
     pathway = db.query(Pathway).filter(Pathway.beneficiary_id == beneficiary_id, Pathway.status == "active").first()
     actions = []
     next_step = None
@@ -315,11 +299,11 @@ def get_beneficiary_journey_home(
                 }
                 break
 
-    if not next_step:
+    if not next_step and not pathway:
         next_step = {
             "action_id": "initial-profile",
             "title": "Complete your voice interview",
-            "description": "Speak with the assistant to discover your verified skill graph and pathways.",
+            "description": "Speak with the assistant to discover your self-reported skills and pathways.",
             "due_date": "Today"
         }
 
@@ -339,10 +323,12 @@ def get_beneficiary_journey_home(
         "action_plan": [
             {
                 "id": a.id,
+                "action_type": a.action_type,
                 "title": a.title,
                 "description": a.description,
                 "status": a.status,
-                "order_index": a.order_index
+                "order_index": a.order_index,
+                "due_date": a.due_date.isoformat() if a.due_date else None
             }
             for a in actions
         ],
@@ -374,6 +360,9 @@ def select_pathway(
         if not is_beneficiary_owner(current_user, ben):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Cannot select pathway for another beneficiary")
 
+    if not can_edit_beneficiary(current_user, ben, db):
+        raise HTTPException(status_code=403, detail="Beneficiary is outside your authorized scope")
+
     # Deactivate existing active pathways
     db.query(Pathway).filter(Pathway.beneficiary_id == req.beneficiary_id, Pathway.status == "active").update({"status": "archived"})
 
@@ -391,8 +380,8 @@ def select_pathway(
         PathwayAction(
             pathway_id=pathway.id,
             action_type="document_collection",
-            title="Prepare Mandatory Scheme Documents",
-            description="Collect Caste Certificate, BPL/Income Proof, and Aadhaar-linked Bank Passbook.",
+            title="Check the documents needed for your chosen pathway",
+            description="Ask your counsellor which documents are required. Requirements depend on the opportunity; do not upload unnecessary sensitive documents.",
             order_index=1,
             due_date=datetime.now(timezone.utc) + timedelta(days=3)
         ),
@@ -407,8 +396,8 @@ def select_pathway(
         PathwayAction(
             pathway_id=pathway.id,
             action_type="enrollment_or_enterprise",
-            title="Confirm Free Skilling Batch or Micro-Enterprise Grant",
-            description="Seat confirmation under PM-AJAY GIA subsidized quota with DSC Nagpur.",
+            title="Review available training or enterprise support",
+            description="Check current availability, costs and eligibility with the provider. A recommendation is not a confirmed seat or grant.",
             order_index=3,
             due_date=datetime.now(timezone.utc) + timedelta(days=14)
         ),
@@ -416,7 +405,7 @@ def select_pathway(
             pathway_id=pathway.id,
             action_type="placement_linkage",
             title="Post-Skilling Apprenticeship / Workshop Linkage",
-            description="Interview with verified employer network or loan subsidy linkage under NSFDC.",
+            description="Discuss current work or enterprise opportunities with your counsellor. Placement and finance are not guaranteed.",
             order_index=4,
             due_date=datetime.now(timezone.utc) + timedelta(days=60)
         )
@@ -449,9 +438,13 @@ def update_action_status(
     elif current_user.role in ["employer", "provider"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Unauthorized role for action updates")
 
+    if not can_edit_beneficiary(current_user, ben, db):
+        raise HTTPException(status_code=403, detail="Beneficiary is outside your authorized scope")
     act.status = req.status
     if req.status == "completed":
         act.completed_at = datetime.now(timezone.utc)
+    else:
+        act.completed_at = None
     db.commit()
     return {"status": "updated", "action_id": act.id, "new_status": act.status}
 
@@ -469,6 +462,9 @@ def counsellor_override(
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
+
+    if not can_view_case(current_user, case, db):
+        raise HTTPException(status_code=403, detail="Case is outside your authorized scope")
 
     # Add case event with trusted authenticated actor
     event = CaseEvent(
@@ -495,6 +491,4 @@ def counsellor_override(
     db.add(audit)
     db.commit()
 
-    return {"status": "override_recorded", "case_id": case_id}
-
-
+    return {"status": "override_recorded", "case_id": case_id, "audit_id": audit.id}

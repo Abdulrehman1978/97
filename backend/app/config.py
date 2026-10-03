@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT.lower() == "production":
             if self.DEMO_MODE:
                 raise ValueError("Production cannot enable DEMO_MODE; use the explicit demo environment")
-            if len(self.SECRET_KEY) < 32 or self.SECRET_KEY.startswith(("lip-", "demo-")):
+            if not self.SECRET_KEY or len(self.SECRET_KEY) < 32 or self.SECRET_KEY.startswith(("lip-", "demo-")):
                 raise ValueError("Production requires a unique SECRET_KEY of at least 32 characters")
         return self
 

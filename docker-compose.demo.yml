@@ -1,11 +1,14 @@
-version: '3.8'
-
 # SIH Judge / Local Demo Override Profile
 # Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
 
 services:
+  db:
+    environment:
+      - POSTGRES_DB=${LIP_DEMO_DATABASE:-lip_demo_v3}
   backend:
     environment:
       - ENVIRONMENT=demo
       - DEMO_MODE=true
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/${LIP_DEMO_DATABASE:-lip_demo_v3}
+      - DATABASE_SYNC_URL=postgresql://postgres:postgres@db:5432/${LIP_DEMO_DATABASE:-lip_demo_v3}
       - SECRET_KEY=demo-secret-key-for-judges-and-evaluators

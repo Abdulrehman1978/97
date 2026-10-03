@@ -24,6 +24,11 @@ def setup_journey_fixtures():
         db.add(ben)
         db.flush()
 
+    ben.user_id = "test-ben-1"
+    from backend.app.admin.models import EnterprisePlan
+    if not db.query(EnterprisePlan).filter(EnterprisePlan.beneficiary_id == ben.id).first():
+        db.add(EnterprisePlan(beneficiary_id=ben.id, activity_title="Test workshop draft", sector="Automotive"))
+
     case = db.query(Case).filter(Case.id == "test-case-1").first()
     if not case:
         case = Case(

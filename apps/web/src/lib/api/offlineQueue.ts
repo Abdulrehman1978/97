@@ -24,69 +24,15 @@ export function getQueuedMutations(): QueuedMutation[] {
   }
 }
 
-export function enqueueMutation(
-  operation: QueuedMutation["operation"],
-  endpoint: string,
-  method: string,
-  payload: any
-): QueuedMutation {
-  const mutation: QueuedMutation = {
-    client_mutation_id: `mut-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    created_at: new Date().toISOString(),
-    operation,
-    endpoint,
-    method,
-    payload,
-    retry_count: 0,
-    status: "queued"
-  };
-
-  if (typeof window !== "undefined") {
-    const list = getQueuedMutations();
-    list.push(mutation);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    window.dispatchEvent(new Event("lip_offline_mutation_enqueued"));
-  }
-
-  return mutation;
+// Legacy entries are retained for recovery, never replayed under a different
+// login. Server-side idempotency and owner scoping are required before enabling
+// mutation replay again.
+export function enqueueMutation(): never {
+  throw new Error("Connection required. Offline mutation replay is not supported.");
 }
 
-export async function flushOfflineQueue(apiFetchFn: (endpoint: string, options?: any) => Promise<any>): Promise<{
-  processed: number;
-  succeeded: number;
-  failed: number;
+export async function flushOfflineQueue(): Promise<{
+  processed: number; succeeded: number; failed: number;
 }> {
-  if (typeof window === "undefined") return { processed: 0, succeeded: 0, failed: 0 };
-  const queue = getQueuedMutations();
-  if (queue.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
-
-  const remaining: QueuedMutation[] = [];
-  let succeeded = 0;
-  let failed = 0;
-
-  for (const item of queue) {
-    if (item.status === "synced") continue;
-    try {
-      await apiFetchFn(item.endpoint, {
-        method: item.method,
-        body: JSON.stringify(item.payload),
-        headers: { "X-Client-Mutation-ID": item.client_mutation_id }
-      });
-      succeeded++;
-    } catch (err: any) {
-      item.retry_count += 1;
-      item.last_error = err.message || "Sync failed";
-      if (item.retry_count < 5) {
-        remaining.push(item);
-      } else {
-        item.status = "failed";
-        remaining.push(item);
-      }
-      failed++;
-    }
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(remaining));
-  window.dispatchEvent(new Event("lip_offline_mutation_flushed"));
-  return { processed: queue.length, succeeded, failed };
+  return { processed: 0, succeeded: 0, failed: getQueuedMutations().length };
 }

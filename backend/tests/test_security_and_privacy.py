@@ -59,35 +59,50 @@ def test_employer_candidate_list_never_leaks_caste():
 
 def test_xss_and_sql_injection_resilience_in_grievance():
     """Verify malicious script payloads in grievance submission do not crash the server and are safely escaped."""
+    import uuid
     from backend.app.shared.security import create_access_token
     from backend.app.database import SessionLocal
     from backend.app.beneficiary.models import Beneficiary
+    from backend.app.identity.models import User
+    from backend.app.journey.models import Grievance
     db = SessionLocal()
+    test_ben_id = f"test-sec-{uuid.uuid4().hex[:8]}"
+    test_user_id = f"test-sec-user-{uuid.uuid4().hex[:8]}"
     try:
-        ben = db.query(Beneficiary).filter(Beneficiary.id == "demo-beneficiary-id").first()
-        if not ben:
-            ben = Beneficiary(id="demo-beneficiary-id", full_name="XSS Test Beneficiary", phone="9222222298", district_code="MH-NAG")
-            db.add(ben)
-            db.commit()
-    finally:
-        db.close()
+        # Create isolated test beneficiary
+        db.add(User(id=test_user_id, full_name="Security Audit Candidate", role="beneficiary", is_active=True))
+        db.flush()
+        ben = Beneficiary(id=test_ben_id, user_id=test_user_id, full_name="Security Audit Candidate", phone="9222222298", district_code="MH-NAG")
+        db.add(ben)
+        db.commit()
 
-    ben_token = create_access_token({"sub": "demo-beneficiary-id", "role": "beneficiary", "name": "Demo User"})
-    malicious_payload = {
-        "beneficiary_id": "demo-beneficiary-id",
-        "category": "training_center",
-        "title": "<script>alert('xss')</script> OR '1'='1' --",
-        "description": "DROP TABLE beneficiaries; <img src=x onerror=alert(1)>"
-    }
-    res = client.post(
-        "/api/v1/journey/grievances",
-        json=malicious_payload,
-        headers={"Authorization": f"Bearer {ben_token}"}
-    )
-    assert res.status_code == 200
-    data = res.json()
-    assert data["status"] in ["registered", "submitted"]
-    assert "grievance_id" in data
+        ben_token = create_access_token({"sub": test_user_id, "role": "beneficiary", "name": "Security Audit Candidate"})
+        malicious_payload = {
+            "beneficiary_id": test_ben_id,
+            "category": "training_center",
+            "title": "<script>alert('xss')</script> OR '1'='1' --",
+            "description": "DROP TABLE beneficiaries; <img src=x onerror=alert(1)>"
+        }
+        res = client.post(
+            "/api/v1/journey/grievances",
+            json=malicious_payload,
+            headers={"Authorization": f"Bearer {ben_token}"}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] in ["registered", "submitted"]
+        assert "grievance_id" in data
+    finally:
+        # Guaranteed cleanup so security test records never leak into serving database
+        try:
+            db.query(Grievance).filter(Grievance.beneficiary_id == test_ben_id).delete()
+            db.query(Beneficiary).filter(Beneficiary.id == test_ben_id).delete()
+            db.query(User).filter(User.id == test_user_id).delete()
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
 
 def test_audit_log_access_strictly_restricted_to_admin():
     """Non-admin roles must be denied 403 on /api/v1/admin/audit-logs."""
