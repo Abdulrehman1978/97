@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const OUT_DIR = path.resolve(__dirname, '../../docs/v3-recovery/final-screens');
+const OUT_DIR = path.resolve(__dirname, '../../../docs/v3-recovery/final-screens');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const BASE_URL = 'http://localhost:3000';
@@ -42,7 +42,8 @@ async function main() {
     await page.fill('#username', username);
     await page.fill('#password', password);
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(() => !!localStorage.getItem('lip_auth_token_v1'), { timeout: 10000 });
+    await page.waitForTimeout(500);
     return page;
   }
 
@@ -198,6 +199,8 @@ async function main() {
     const page = await loginAs(fieldCtx, 'worker@nagpur.gov.in', 'worker123');
     await page.goto(`${BASE_URL}/field`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '09_field_desk_desktop.png') });
     await fieldCtx.close();
   }
@@ -208,6 +211,8 @@ async function main() {
     const page = await loginAs(finCtx, 'finance@nagpur.gov.in', 'finance123');
     await page.goto(`${BASE_URL}/counsellor/finance`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '10_finance_desk_desktop.png') });
     await finCtx.close();
   }
@@ -218,6 +223,8 @@ async function main() {
     const page = await loginAs(provCtx, 'provider@pmkk.gov.in', 'provider123');
     await page.goto(`${BASE_URL}/provider`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '11_provider_desk_desktop.png') });
     await provCtx.close();
   }
@@ -228,6 +235,8 @@ async function main() {
     const page = await loginAs(empCtx, 'employer@mahavitaran.com', 'employer123');
     await page.goto(`${BASE_URL}/employer`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '12_employer_desk_desktop.png') });
     await empCtx.close();
   }
@@ -238,6 +247,8 @@ async function main() {
     const page = await loginAs(admCtx, 'admin@nagpur.gov.in', 'admin123');
     await page.goto(`${BASE_URL}/admin`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '13_admin_dashboard_desktop.png') });
     await admCtx.close();
   }
@@ -248,6 +259,8 @@ async function main() {
     const page = await loginAs(admCtx, 'admin@nagpur.gov.in', 'admin123');
     await page.goto(`${BASE_URL}/coordination`);
     await page.waitForLoadState('networkidle');
+    await page.waitForSelector('h1', { timeout: 10000 });
+    await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(OUT_DIR, '14_coordination_portal_desktop.png') });
     await admCtx.close();
   }

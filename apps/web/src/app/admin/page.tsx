@@ -7,16 +7,9 @@ import type { DistrictDashboard, SourceHealth, BatchSimulation, ProjectProposal 
 import { useRuntimeTruth } from "@/lib/runtime-truth-context";
 import { RequireAuth } from "@/lib/api/auth-context";
 import {
-  LayoutDashboard,
-  Users,
-  GraduationCap,
-  MapPin,
   Calculator,
-  FileSpreadsheet,
   ShieldCheck,
   AlertCircle,
-  TrendingUp,
-  Activity,
   Layers,
   Sparkles,
   Download,
