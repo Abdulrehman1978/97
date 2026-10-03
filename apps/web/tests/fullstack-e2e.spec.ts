@@ -134,21 +134,21 @@ test.describe('True Full-Stack Integrated E2E Suite', () => {
 
   test('5. Journey: Action Plan Completion & Reload Persistence', async ({ page }) => {
     await page.goto('/journey');
-    await expect(page.locator('h1')).toContainText(/उपजीविका प्रगती|Journey/i);
+    await expect(page.locator('h1')).toContainText(/तुमची पुढील कृती|उपजीविका प्रगती|Journey|Your next step/i);
 
     // Find action cards
-    const actionCards = page.locator('main .bg-white.rounded-3xl, main .rounded-2xl');
+    const actionCards = page.locator('main .bg-white.rounded-3xl, main .rounded-2xl, main section');
     await expect(actionCards.first()).toBeVisible();
 
     // Toggle an action if available
-    const toggleBtn = page.locator('button:has-text("पूर्ण झाले"), button:has-text("Mark Done"), button:has-text("Done")').first();
+    const toggleBtn = page.locator('#markCompleteBtn, button:has-text("पूर्ण झाले"), button:has-text("Mark Done"), button:has-text("Done")').first();
     if (await toggleBtn.isVisible()) {
       await toggleBtn.click();
       await page.waitForTimeout(1000);
 
       // Reload browser to prove persistence across reloads
       await page.reload();
-      await expect(page.locator('h1')).toContainText(/उपजीविका प्रगती|Journey/i);
+      await expect(page.locator('h1')).toContainText(/तुमची पुढील कृती|उपजीविका प्रगती|Journey|Your next step/i);
     }
   });
 

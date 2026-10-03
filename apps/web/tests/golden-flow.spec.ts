@@ -68,7 +68,7 @@ test.describe('Golden Beneficiary Hero Flow', () => {
     await page.goto('/');
     await setDemoSession(page);
     await page.goto('/journey');
-    await expect(page.locator('body')).toContainText(/Journey|Action Plan|Next Step|पायरी|Grievance/i);
+    await expect(page.locator('body')).toContainText(/Journey|Action Plan|Next Step|पायरी|Grievance|तुमची पुढील कृती|माझा प्रवास/i);
   });
 
   test('6. Help / grievance page renders and form is functional', async ({ page }) => {
