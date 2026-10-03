@@ -7,8 +7,8 @@ import { User, ChevronDown, LogIn, LogOut, ShieldCheck, Compass, Sparkles } from
 import { TruthBadge } from "./TruthBadge";
 import { useAuth } from "@/lib/api/auth-context";
 import { useLanguage } from "@/lib/language-context";
+import { useRuntimeTruth } from "@/lib/runtime-truth-context";
 
-const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const ALL_PORTALS = [
   { label: "Beneficiary Talk & Intake", path: "/interview", role: "beneficiary", desc: "Spoken trade intake & skills verification" },
@@ -35,18 +35,10 @@ export function Navbar() {
   const router = useRouter();
   const { status, user, logout } = useAuth();
   const { locale, setLocale, t } = useLanguage();
+  const { truthState, isDemoMode } = useRuntimeTruth();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const toggleLanguage = () => {
-    if (locale === "mr") {
-      setLocale("en");
-    } else if (locale === "en") {
-      setLocale("hi");
-    } else {
-      setLocale("mr");
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -54,7 +46,7 @@ export function Navbar() {
     router.push("/");
   };
 
-  const visiblePortals = IS_DEMO_MODE
+  const visiblePortals = isDemoMode
     ? [...ALL_PORTALS, JUDGE_PORTAL]
     : ALL_PORTALS.filter((p) => {
         if (!user) return p.role === null || p.role === "beneficiary";
@@ -63,20 +55,20 @@ export function Navbar() {
       });
 
   return (
-    <header className="fixed top-0 left-0 right-0 w-full z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(15,41,66,0.05)] border-b border-outline-variant/20 pt-safe">
-      <div className="max-w-7xl mx-auto h-16 px-gutter-mobile sm:px-gutter flex items-center justify-between gap-space-xs">
+    <header onKeyDown={event => { if (event.key === "Escape") { setRoleMenuOpen(false); setUserMenuOpen(false); } }} className="fixed top-0 left-0 right-0 w-full z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(15,41,66,0.05)] border-b border-outline-variant/20 pt-safe">
+      <div className="max-w-7xl mx-auto h-16 px-3 sm:px-gutter flex items-center justify-between gap-space-xs">
         {/* Brand identity: LUNA / LIP */}
-        <div className="flex items-center gap-space-xs">
+        <div className="flex shrink-0 flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-space-xs">
           <Link href="/" className="flex items-center gap-1.5 focus:outline-none">
-            <span className="font-headline-sm text-headline-sm text-primary font-bold tracking-tight">LUNA</span>
-            <span className="text-outline text-label-md font-label-md">/</span>
+            <span className="hidden sm:inline font-headline-sm text-headline-sm text-primary font-bold tracking-tight">LUNA</span>
+            <span className="hidden sm:inline text-outline text-label-md font-label-md">/</span>
             <span className="font-label-md text-label-md text-secondary font-bold tracking-wider">LIP</span>
           </Link>
-          <TruthBadge state={IS_DEMO_MODE ? "DEMO_DATA" : "LIVE"} compact />
+          <TruthBadge state={truthState} compact />
         </div>
 
         {/* Center / Navigation Portal Switcher (Desktop & Field) */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden xl:flex items-center gap-2">
           <Link
             href="/interview"
             className="px-3 py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
@@ -101,7 +93,7 @@ export function Navbar() {
           >
             {t("nav.my_journey", "My Journey")}
           </Link>
-          {IS_DEMO_MODE && (
+          {isDemoMode && (
             <Link
               href="/demo"
               className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-bold shadow-xs hover:bg-secondary-fixed-dim transition-colors"
@@ -120,25 +112,25 @@ export function Navbar() {
               id="portals-menu-btn"
               onClick={() => setRoleMenuOpen(!roleMenuOpen)}
               type="button"
-              className="min-h-[44px] px-2.5 py-1.5 flex items-center gap-1 rounded-lg bg-surface-container text-primary font-label-md text-label-md hover:bg-surface-container-high transition-colors"
+              className="min-w-11 min-h-[44px] justify-center px-2 py-1.5 flex items-center gap-1 rounded-lg bg-surface-container text-primary font-label-md text-label-md hover:bg-surface-container-high transition-colors"
               aria-expanded={roleMenuOpen}
               aria-label="Toggle all modules"
             >
               <Compass className="w-4 h-4 text-secondary" />
               <span className="hidden sm:inline">Portals</span>
-              <ChevronDown className="w-3.5 h-3.5 text-outline" />
+              <ChevronDown className="hidden sm:block w-3.5 h-3.5 text-outline" />
             </button>
 
             {roleMenuOpen && (
               <div
-                className="absolute right-0 mt-2 w-72 sm:w-80 rounded-xl bg-surface-container-lowest shadow-xl border border-outline-variant/30 py-2 z-50 animate-in fade-in"
-                role="menu"
+                className="fixed left-3 right-3 top-16 mt-2 sm:absolute sm:left-auto sm:top-auto sm:right-0 sm:w-80 rounded-xl bg-surface-container-lowest shadow-xl border border-outline-variant/30 py-2 z-50 animate-in fade-in"
+                aria-label="Workspace navigation"
               >
                 <div className="px-3 py-1.5 border-b border-outline-variant/20 flex items-center justify-between">
                   <span className="font-label-sm text-label-sm uppercase font-bold text-outline">
                     Workspaces &amp; Roles
                   </span>
-                  <TruthBadge state={IS_DEMO_MODE ? "DEMO_DATA" : "LIVE"} compact />
+                  <TruthBadge state={truthState} compact />
                 </div>
                 <div className="max-h-80 overflow-y-auto py-1">
                   {visiblePortals.map((portal) => (
@@ -147,7 +139,7 @@ export function Navbar() {
                       href={portal.path}
                       onClick={() => setRoleMenuOpen(false)}
                       className="flex flex-col px-3 py-2 hover:bg-surface-container-low transition-colors"
-                      role="menuitem"
+                      
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-label-md text-label-md text-on-surface font-semibold">
@@ -169,19 +161,49 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Working Language Toggle: Marathi | Hindi | English */}
-          <button
-            onClick={toggleLanguage}
-            type="button"
-            aria-label="Switch language: Marathi, Hindi or English"
-            className="min-w-[44px] min-h-[44px] px-2.5 py-1.5 flex items-center justify-center rounded-lg bg-surface-container text-on-surface font-label-md text-label-md active:bg-surface-container-high transition-colors"
+          {/* Direct 3-Choice Language Switcher */}
+          <div
+            role="group"
+            aria-label="Interface language"
+            className="flex items-center bg-surface-container rounded-xl p-0.5 border border-outline-variant/40"
           >
-            <span className={locale === "mr" ? "font-bold text-primary" : "text-on-surface-variant"}>मराठी</span>
-            <span className="mx-1 text-outline-variant">|</span>
-            <span className={locale === "hi" ? "font-bold text-primary" : "text-on-surface-variant"}>हिंदी</span>
-            <span className="mx-1 text-outline-variant">|</span>
-            <span className={locale === "en" ? "font-bold text-primary" : "text-on-surface-variant"}>EN</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setLocale("mr")}
+              aria-pressed={locale === "mr"}
+              className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                locale === "mr"
+                  ? "bg-primary text-on-primary shadow-xs"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+              }`}
+            >
+              मराठी
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale("hi")}
+              aria-pressed={locale === "hi"}
+              className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                locale === "hi"
+                  ? "bg-primary text-on-primary shadow-xs"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+              }`}
+            >
+              हिंदी
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale("en")}
+              aria-pressed={locale === "en"}
+              className={`min-h-[36px] px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                locale === "en"
+                  ? "bg-primary text-on-primary shadow-xs"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
+              }`}
+            >
+              EN
+            </button>
+          </div>
 
           {/* User Account / Sign In */}
           <div className="relative">
@@ -189,7 +211,7 @@ export function Navbar() {
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 type="button"
-                className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-transform"
+                className="w-11 h-11 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-transform"
                 aria-label="User profile menu"
                 aria-expanded={userMenuOpen}
               >
@@ -200,12 +222,12 @@ export function Navbar() {
             ) : (
               <Link
                 href="/login"
-                className="min-h-[40px] px-3 py-1.5 rounded-full bg-primary-container text-on-primary flex items-center gap-1.5 shrink-0 shadow-sm hover:bg-primary transition-colors font-label-sm text-label-sm font-bold"
+                className="min-h-11 min-w-11 justify-center px-3 py-1.5 rounded-full bg-primary-container text-on-primary flex items-center gap-1.5 shrink-0 shadow-sm hover:bg-primary transition-colors font-label-sm text-label-sm font-bold"
                 aria-label="Sign In"
                 title="Sign In"
               >
                 <User className="w-4 h-4 text-secondary-fixed" />
-                <span>Sign In</span>
+                <span className="hidden sm:inline">{t("header.login", "Sign In")}</span>
               </Link>
             )}
 

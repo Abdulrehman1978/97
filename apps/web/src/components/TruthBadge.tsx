@@ -5,6 +5,7 @@ export type TruthState =
   | "LIVE"
   | "DEMO_DATA"
   | "SANDBOX"
+  | "OFFLINE"
   | "OFFLINE_QUEUED"
   | "ADAPTER_READY"
   | "UNKNOWN"
@@ -28,10 +29,10 @@ export function TruthBadge({ state, className = "", compact = false }: TruthBadg
       return (
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0] font-label-sm text-label-sm font-bold shadow-xs ${className}`}
-          title="Verified Live Production Node"
+          title="Connected runtime; see individual records for source verification"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-[#059669] animate-pulse" />
-          <span>{compact ? "LIVE" : "Verified Live"}</span>
+          <span>LIVE</span>
         </span>
       );
 
@@ -54,6 +55,14 @@ export function TruthBadge({ state, className = "", compact = false }: TruthBadg
         >
           <Sparkles className="w-3 h-3 text-secondary" />
           <span>SANDBOX</span>
+        </span>
+      );
+
+    case "OFFLINE":
+      return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm ${className}`}>
+          <AlertCircle className="w-3 h-3" />
+          <span>OFFLINE</span>
         </span>
       );
 
