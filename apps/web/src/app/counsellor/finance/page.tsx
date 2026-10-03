@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
+import type { EnterprisePlan, FieldCase } from "@/lib/api/contracts";
 import { RequireAuth } from "@/lib/api/auth-context";
-import { getEnterprisePlan } from "@/lib/api";
+import { getEnterprisePlan, getCases } from "@/lib/api";
 import {
   Briefcase,
   IndianRupee,
@@ -31,68 +32,57 @@ export default function FinancialCounsellorPage() {
 
 function FinancialCounsellorWorkspace() {
   const [loading, setLoading] = useState(true);
-  const [enterpriseCase, setEnterpriseCase] = useState<any>({
-    beneficiary_name: "Ramesh Mesram (रमेश मेश्राम)",
-    target_enterprise: "Two-Wheeler Service & Spare Parts Center",
-    district: "Nagpur (MH)",
-    assumed_capital_needs: {
-      equipment_capex: 75000,
-      working_capital_opex: 25000,
-      total_estimated_inr: 100000,
-      break_even_months: 6
-    },
-    scheme_prescreening: [
-      {
-        scheme_name: "PM-AJAY Grants-in-Aid (GIA) Asset Subsidy",
-        indicative_amount: "Up to ₹50,000 (100% Grant)",
-        status: "Potentially Relevant (Pre-screening)",
-        condition: "SC candidate with income <= 2.5L and verified NSQF L4 certificate. Sanction subject to DSC approval."
-      },
-      {
-        scheme_name: "NSFDC Micro-Credit Scheme",
-        indicative_amount: "Up to ₹50,000 at 5% Concessional Interest",
-        status: "Verification Required",
-        condition: "Requires project feasibility endorsement by Financial Counsellor."
-      },
-      {
-        scheme_name: "MUDRA Shishu Loan",
-        indicative_amount: "Up to ₹50,000 collateral-free",
-        status: "Alternative Bank Linkage",
-        condition: "Commercial bank credit linkage with active Aadhaar DBT account."
-      }
-    ],
-    literacy_checklist: [
-      { id: "fc-1", task: "Understand difference between revenue and profit", done: true },
-      { id: "fc-2", task: "Setup UPI Merchant QR code (PhonePe/GPay for shop)", done: true },
-      { id: "fc-3", task: "Weekly physical cashbook logging", done: false },
-      { id: "fc-4", task: "Separate personal household expenses from shop account", done: false }
-    ],
-    truth_state: "DEMO_DATA"
-  });
+  const [enterpriseCase, setEnterpriseCase] = useState<EnterprisePlan | null>(null);
 
-  const [checklist, setChecklist] = useState<any[]>(enterpriseCase.literacy_checklist);
+  const [checklist, setChecklist] = useState<EnterprisePlan["literacy_checklist"]>([]);
+
+  const [assignedCases, setAssignedCases] = useState<FieldCase[]>([]);
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchPlan = async () => {
-      setLoading(true);
-      try {
-        const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
-        const idToFetch = storedId || "demo-beneficiary-id";
-        const data = await getEnterprisePlan(idToFetch);
-        if (data) {
-          setEnterpriseCase(data);
-          if (data.literacy_checklist) {
-            setChecklist(data.literacy_checklist);
-          }
-        }
-      } catch (err) {
-        console.warn("Using default enterprise case:", err);
-      } finally {
+    let cancelled = false;
+    getCases().then(data => {
+      if (cancelled) return;
+      setAssignedCases(data);
+      setSelectedBeneficiary(current => current || data[0]?.beneficiary_id || "");
+      if (!data.length) setLoading(false);
+    }).catch(error => {
+      if (!cancelled) {
+        setApiError(error instanceof Error ? error.message : "Could not load assigned cases.");
         setLoading(false);
       }
-    };
-    fetchPlan();
-  }, []);
+    });
+    return () => { cancelled = true; };
+  }, [retry]);
+
+  useEffect(() => {
+    if (!selectedBeneficiary) return;
+    let cancelled = false;
+    setLoading(true);
+    setApiError(null);
+    setEnterpriseCase(null);
+    setChecklist([]);
+    getEnterprisePlan(selectedBeneficiary).then(data => {
+      if (!cancelled) {
+        setEnterpriseCase(data);
+        setChecklist(data?.literacy_checklist ?? []);
+      }
+    }).catch(error => {
+      if (!cancelled) setApiError(error instanceof Error ? error.message : "Could not load the enterprise plan.");
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedBeneficiary, retry]);
+
+  const caseSelector = <label className="flex flex-col gap-2">
+    Assigned case
+    <select className="min-h-11 rounded-xl border p-3 bg-surface" value={selectedBeneficiary}
+      onChange={event => setSelectedBeneficiary(event.target.value)}>
+      {!assignedCases.length && <option value="">No assigned cases</option>}
+      {assignedCases.map(item => <option key={item.id} value={item.beneficiary_id}>{item.beneficiary_name}</option>)}
+    </select>
+  </label>;
 
   const handleToggleChecklist = (idx: number) => {
     setChecklist((prev) =>
@@ -101,21 +91,47 @@ function FinancialCounsellorWorkspace() {
   };
 
   const handleExportDraft = () => {
-    alert(
-      "DECISION-SUPPORT DRAFT EXPORT:\n\n" +
-      "This document is a technical decision-support draft for counselling review only.\n" +
-      "It is NOT an approval, sanction letter, or official certificate.\n\n" +
-      `Beneficiary: ${enterpriseCase.beneficiary_name}\n` +
-      `Target Enterprise: ${enterpriseCase.target_enterprise}\n` +
-      `Assumed Capital: ₹${enterpriseCase.assumed_capital_needs?.total_estimated_inr?.toLocaleString()}`
-    );
+    if (!enterpriseCase) return;
+    const payload = {
+      DOCUMENT_TYPE: "DECISION_SUPPORT_DRAFT",
+      LEGAL_STATUS: "DRAFT — NOT A SANCTION / NOT AN APPROVAL / NOT A CERTIFICATE",
+      DISCLAIMER: "This artifact is a technical decision-support draft for counselling review only. It confers no legal sanction, credit approval, or scheme subsidy.",
+      TIMESTAMP: new Date().toISOString(),
+      BENEFICIARY_NAME: enterpriseCase.beneficiary_name,
+      TARGET_ENTERPRISE: enterpriseCase.target_enterprise,
+      DISTRICT: enterpriseCase.district,
+      CAPITAL_REQUIREMENTS: enterpriseCase.assumed_capital_needs,
+      SCHEME_PRESCREENING: enterpriseCase.scheme_prescreening,
+      CHECKLIST_STORAGE: "Session draft — not persisted to the server",
+      FINANCIAL_LITERACY_CHECKLIST: checklist
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `PM-AJAY-Enterprise-Draft-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
+
+  if (loading || apiError || !enterpriseCase) {
+    return <div className="min-h-screen bg-surface"><Navbar /><main className="mx-auto max-w-3xl px-4 pt-24">
+      <h1 className="text-2xl font-bold">Financial counselling</h1>
+      {caseSelector}
+      <p role={apiError ? "alert" : "status"} className="my-4">{loading ? "Loading assigned enterprise plan…" : apiError || "No enterprise plan has been prepared for the assigned case."}</p>
+      {apiError && <button onClick={() => setRetry(value => value + 1)} className="rounded-xl bg-primary p-3 text-on-primary">Retry</button>}
+    </main></div>;
+  }
 
   return (
     <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar />
 
-      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
+      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 pt-24 pb-6 flex flex-col gap-6">
+        {caseSelector}
         {/* Header Strip */}
         <div className="bg-surface-container rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -123,7 +139,7 @@ function FinancialCounsellorWorkspace() {
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-bold">
                 GIA Mandate • Trained Financial Consultant Workspace
               </span>
-              <TruthBadge state={enterpriseCase.truth_state || "DEMO_DATA"} />
+              <TruthBadge state={enterpriseCase.truth_state} />
             </div>
             <h1 className="font-headline-md text-headline-md text-primary font-bold mt-1">
               वित्तीय व सूक्ष्म-उद्यम समुपदेशक डेस्क (Financial & Enterprise Counsellor)
@@ -154,6 +170,7 @@ function FinancialCounsellorWorkspace() {
           </div>
         </div>
 
+        <p className="rounded-xl bg-surface-container p-3">Checklist: session draft only. Download the advisory to keep your changes; it is not an approval.</p>
         {/* 2-Column Responsive Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Beneficiary & Capital Breakdown (7 cols) */}

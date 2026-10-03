@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
+import type { CoordinationReferral } from "@/lib/api/contracts";
+import { useRuntimeTruth } from "@/lib/runtime-truth-context";
 import { RequireAuth } from "@/lib/api/auth-context";
 import {
   ArrowRightLeft,
@@ -28,53 +30,24 @@ export default function InterAgencyCoordinationPage() {
 }
 
 function CoordinationWorkspace() {
+  const { truthState } = useRuntimeTruth();
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const defaultItems = [
-    {
-      id: "COORD-2026-001",
-      beneficiary_name: "Ramesh Mesram (रमेश मेश्राम)",
-      from_dept: "District Skill Committee (DSC) Nagpur",
-      to_dept: "Vidarbha Skills Academy (PIA)",
-      action_required: "Verify workshop tools & confirm RPL assessment date",
-      sla_days_remaining: 3,
-      status: "In Progress",
-      blocker: "None"
-    },
-    {
-      id: "COORD-2026-002",
-      beneficiary_name: "Sunita Kamble (सुनीता कांबळे)",
-      from_dept: "Field Counsellor Desk",
-      to_dept: "Mahatma Phule BC Development Corporation (MPBCDC)",
-      action_required: "Verify Caste validity and revenue income certificate",
-      sla_days_remaining: -1, // Escalated
-      status: "Escalated",
-      blocker: "Revenue portal server response delay"
-    },
-    {
-      id: "COORD-2026-003",
-      beneficiary_name: "Vijay Gaikwad (विजय गायकवाड)",
-      from_dept: "District Social Welfare Office",
-      to_dept: "Green Jobs Academy, Butibori",
-      action_required: "Audit wheelchair ramp and accessible toilet facilities",
-      sla_days_remaining: 5,
-      status: "Pending",
-      blocker: "Center inspection scheduled for Friday"
-    }
-  ];
 
-  const [items, setItems] = useState<any[]>(defaultItems);
+  const [items, setItems] = useState<CoordinationReferral[]>([]);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const fetchItems = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       const data = await getCoordinationItems();
-      if (data && data.length > 0) {
-        setItems(data);
-      }
-    } catch (err) {
-      console.warn("Using default coordination items:", err);
+      setItems(data || []);
+    } catch (err: unknown) {
+      setApiError(err instanceof Error ? err.message : "Failed to load coordination records.");
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -86,21 +59,20 @@ function CoordinationWorkspace() {
 
   const handleUpdateStatus = async (referralId: string, currentStatus: string) => {
     setUpdatingId(referralId);
+    setMutationError(null);
     const newStatus = currentStatus.toLowerCase().includes("progress") ? "completed" : "in_progress";
     try {
       await updateCoordinationStatus(referralId, newStatus);
+      // AUTHORITATIVE UPDATE ONLY ON SUCCESS
       setItems((prev) =>
         prev.map((it) =>
           it.id === referralId ? { ...it, status: newStatus === "completed" ? "Completed" : "In Progress" } : it
         )
       );
-    } catch (e) {
-      console.warn("Status update fallback:", e);
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === referralId ? { ...it, status: newStatus === "completed" ? "Completed" : "In Progress" } : it
-        )
-      );
+    } catch (e: any) {
+      console.warn("Status update failed:", e);
+      // RETAIN PRIOR STATE ON FAILURE - DO NOT MUTATE UI
+      setMutationError(`Failed to update status on server: ${e?.message || "Network error"}. Prior state retained.`);
     } finally {
       setUpdatingId(null);
     }
@@ -110,7 +82,7 @@ function CoordinationWorkspace() {
     <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar />
 
-      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
+      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 pt-24 pb-6 flex flex-col gap-6">
         {/* Header Strip */}
         <div className="bg-surface-container rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -118,7 +90,7 @@ function CoordinationWorkspace() {
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-bold">
                 GIA Mandate • Cross-Agency Workflow &amp; Handoff Engine
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state={truthState} />
             </div>
             <h1 className="font-headline-md text-headline-md text-primary font-bold mt-1">
               आंतर-विभागीय समन्वय कार्यक्षेत्र (Inter-Agency Coordination)
@@ -131,10 +103,41 @@ function CoordinationWorkspace() {
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 rounded-xl bg-tertiary-fixed/40 border border-secondary/30 text-on-tertiary-container font-code-sm text-code-sm font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-secondary" />
-              SLA Adherence: 94.2%
+              Recorded handoffs
             </span>
           </div>
         </div>
+
+        {/* Error Banners */}
+        {apiError && (
+          <div className="bg-error-container text-on-error-container p-4 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              <span>{apiError}</span>
+            </div>
+            <button
+              onClick={fetchItems}
+              className="px-3 py-1 bg-surface rounded-lg font-bold text-sm"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {mutationError && (
+          <div className="bg-error-container text-on-error-container p-4 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              <span>{mutationError}</span>
+            </div>
+            <button
+              onClick={() => setMutationError(null)}
+              className="px-2 py-0.5 text-xs bg-surface rounded"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Coordination Table Card */}
         <div className="bg-surface-container-lowest rounded-2xl p-5 md:p-6 border border-surface-variant/40 shadow-sm flex flex-col gap-4">
@@ -147,6 +150,16 @@ function CoordinationWorkspace() {
             </span>
           </div>
 
+          {loading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span>Loading cross-agency handoffs...</span>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="py-12 text-center text-on-surface-variant">
+              <p>No active cross-agency coordination records found.</p>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left font-body-sm text-body-sm">
               <thead className="bg-surface-container-low border-b border-surface-variant/30 text-outline font-label-sm text-label-sm uppercase tracking-wider">
@@ -162,7 +175,7 @@ function CoordinationWorkspace() {
               </thead>
               <tbody className="divide-y divide-surface-variant/20">
                 {items.map((it) => {
-                  const isEscalated = it.status === "Escalated" || it.sla_days_remaining < 0;
+                  const isEscalated = it.status === "Escalated" || (it.sla_days_remaining !== null && it.sla_days_remaining < 0);
                   const isUpdating = updatingId === it.id;
 
                   return (
@@ -196,7 +209,7 @@ function CoordinationWorkspace() {
                             : "bg-surface-container text-primary"
                         }`}>
                           <Clock className="w-3 h-3" />
-                          {isEscalated ? "Escalated (-1d)" : `${it.sla_days_remaining}d remaining`}
+                          {isEscalated ? "Overdue / escalated" : it.sla_days_remaining === null ? "No due date recorded" : `${it.sla_days_remaining}d remaining`}
                         </span>
                       </td>
                       <td className="p-3">
@@ -231,6 +244,7 @@ function CoordinationWorkspace() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </main>
     </div>

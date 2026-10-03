@@ -34,6 +34,7 @@ function ProviderPortalWorkspace() {
   const [batches, setBatches] = useState<any[]>([]);
   const [centers, setCenters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [showAddBatch, setShowAddBatch] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -46,55 +47,25 @@ function ProviderPortalWorkspace() {
     seat_capacity: 30,
     seats_available: 18,
     start_date: "2026-10-15",
-    is_verified_live_batch: true,
-    truth_state: "LIVE"
+    is_verified_live_batch: false,
+    truth_state: "UNVERIFIED"
   });
 
   const loadData = async () => {
+    setLoading(true);
+    setApiError(null);
     try {
-      setLoading(true);
       const [bList, cList] = await Promise.all([
-        getTrainingOptions("MH-NAG").catch(() => []),
-        getTrainingCenters("MH-NAG").catch(() => [])
+        getTrainingOptions("MH-NAG"),
+        getTrainingCenters("MH-NAG")
       ]);
 
-      const seedBatches = [
-        {
-          id: "b-1",
-          batch_code: "PM-AJAY-NAG-2026-B1",
-          qualification_title: "Automotive Two-Wheeler Service Technician",
-          qp_code: "ASC/Q1411",
-          seat_capacity: 30,
-          seats_available: 12,
-          start_date: "2026-10-10",
-          status: "Enrolling",
-          is_verified: true,
-          truth_state: "LIVE"
-        },
-        {
-          id: "b-2",
-          batch_code: "PM-AJAY-SOLAR-2026-B2",
-          qualification_title: "Solar PV Rooftop Installer (Suryamitra)",
-          qp_code: "SGJ/Q0101",
-          seat_capacity: 25,
-          seats_available: 4,
-          start_date: "2026-10-20",
-          status: "Near Full",
-          is_verified: true,
-          truth_state: "LIVE"
-        }
-      ];
-
-      setBatches(bList && bList.length > 0 ? bList : seedBatches);
-      setCenters(cList && cList.length > 0 ? cList : [
-        {
-          id: "tc-1",
-          name: "Pradhan Mantri Kaushal Kendra (PMKK) — Hingna",
-          code: "TC-MH-NAG-01",
-          address: "Plot 42, Hingna MIDC, Nagpur, Maharashtra",
-          has_ramp: true
-        }
-      ]);
+      setBatches(bList || []);
+      setCenters(cList || []);
+    } catch (err: unknown) {
+      setApiError(err instanceof Error ? err.message : "Failed to load training batches from server.");
+      setBatches([]);
+      setCenters([]);
     } finally {
       setLoading(false);
     }
@@ -325,6 +296,22 @@ function ProviderPortalWorkspace() {
           </div>
         )}
 
+        {/* Error Banner */}
+        {apiError && (
+          <div className="p-4 rounded-xl bg-error-container text-on-error-container flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>{apiError}</span>
+            </div>
+            <button
+              onClick={loadData}
+              className="px-3 py-1 bg-surface text-on-surface rounded-lg font-bold text-sm shadow-xs"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Live Batches Table */}
         <div className="bg-surface-container-lowest rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col gap-4">
           <div className="flex items-center justify-between">
@@ -336,6 +323,23 @@ function ProviderPortalWorkspace() {
             </span>
           </div>
 
+          {loading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-on-surface-variant">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span>Loading training batches from server...</span>
+            </div>
+          ) : batches.length === 0 ? (
+            <div className="py-12 text-center text-on-surface-variant flex flex-col items-center gap-3">
+              <p className="font-title-md text-title-md text-primary font-bold">No batches scheduled.</p>
+              <p className="text-sm">There are currently no training batches registered for this center.</p>
+              <button
+                onClick={() => setShowAddBatch(true)}
+                className="px-4 py-2 bg-primary text-on-primary rounded-xl font-bold text-sm"
+              >
+                Schedule Batch
+              </button>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left font-body-sm text-body-sm">
               <thead className="bg-surface-container-low border-b border-surface-variant/30 text-outline font-label-sm text-label-sm uppercase tracking-wider">
@@ -373,6 +377,7 @@ function ProviderPortalWorkspace() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </main>
     </div>

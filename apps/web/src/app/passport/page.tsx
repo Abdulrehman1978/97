@@ -1,20 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
-import { TruthBadge } from "@/components/TruthBadge";
+import { TruthBadge, TruthState } from "@/components/TruthBadge";
 import { useLanguage } from "@/lib/language-context";
-import { getLivelihoodPassport } from "@/lib/api";
-import { NetworkError } from "@/lib/api/errors";
+import { useAuth } from "@/lib/api/auth-context";
+import { useRuntimeTruth } from "@/lib/runtime-truth-context";
+import { apiFetch, getLivelihoodPassport } from "@/lib/api";
 import {
   Award,
   BadgeCheck,
   CheckCircle2,
   Wrench,
-  Car,
   ShieldCheck,
   ArrowRight,
   AlertCircle,
@@ -22,496 +24,589 @@ import {
   Sparkles,
   MapPin,
   Mic,
-  Briefcase
+  Briefcase,
+  RefreshCw,
+  QrCode,
+  Download,
+  Share2,
+  LogIn,
 } from "lucide-react";
 
-const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+export type PassportViewStatus =
+  | "loading"
+  | "unauthenticated"
+  | "empty"
+  | "authenticated_with_profile"
+  | "demo_profile"
+  | "error";
+
+interface SkillItem {
+  id: string;
+  name: string;
+  name_mr?: string;
+  status: "verified" | "inferred";
+  confidence: number;
+  evidence: string;
+  nsqf_code?: string;
+  level?: string;
+  source: string;
+}
+
+interface PassportModel {
+  beneficiary_name: string;
+  district: string;
+  district_code: string;
+  qr_code_token: string;
+  is_verifiable: boolean;
+  skills: SkillItem[];
+  experience: {
+    title: string;
+    duration: string;
+    description: string;
+    endorsement?: string;
+    verified: boolean;
+  };
+  rpl: {
+    title: string;
+    readiness_tier: string;
+    bridge_hours: number;
+    description: string;
+    disclaimer: string;
+  };
+}
+
+const DEMO_PASSPORT: PassportModel = {
+  beneficiary_name: "Ramesh Mesram",
+  district: "Nagpur Rural (MH-NAG)",
+  district_code: "MH-NAG",
+  qr_code_token: "LIP-MH-NAG-2026-88",
+  is_verifiable: true,
+  skills: [
+    {
+      id: "sk-1",
+      name: "Two-Wheeler Engine Overhaul",
+      name_mr: "इंजिन दुरुस्ती व सुटे भाग जोडणी",
+      status: "verified",
+      confidence: 94,
+      evidence: "3 years informal garage experience disassembling engines and tuning valves.",
+      nsqf_code: "ASC/Q1411",
+      level: "NSQF Level 3",
+      source: "spoken_evidence",
+    },
+    {
+      id: "sk-2",
+      name: "Brake System Maintenance",
+      name_mr: "हायड्रॉलिक व ड्रम ब्रेक दुरुस्ती",
+      status: "verified",
+      confidence: 95,
+      evidence: "Inspects and replaces hydraulic brake pads and drum shoes routinely.",
+      nsqf_code: "ASC/Q1402",
+      level: "NSQF Level 4",
+      source: "spoken_evidence",
+    },
+    {
+      id: "sk-3",
+      name: "Workshop Tools & Safety",
+      name_mr: "टूल्स व गॅरेज सुरक्षा नियम",
+      status: "verified",
+      confidence: 90,
+      evidence: "Proficient with pneumatic impact tools, torque wrenches, and shop safety.",
+      nsqf_code: "ASC/Q1401",
+      level: "Baseline Core",
+      source: "spoken_evidence",
+    },
+  ],
+  experience: {
+    title: "Informal Mechanic Assistant at Roadside Garage",
+    duration: "3 Years (36 Months)",
+    description: "Daily maintenance, electrical diagnostics, engine overhauls and customer service at Hingna Automotive Hub.",
+    endorsement: "Ward Committee Endorsed",
+    verified: true,
+  },
+  rpl: {
+    title: "Recognition of Prior Learning (RPL)",
+    readiness_tier: "Tier 1 Fast Track",
+    bridge_hours: 30,
+    description: "Your 3 years of hands-on informal workshop experience qualifies for direct 30-hour bridge assessment under PM-AJAY GIA.",
+    disclaimer: "Pre-screening decision support; formal credential issued after training center assessment.",
+  },
+};
 
 export default function PassportPage() {
+  return <React.Suspense fallback={<div role="status" className="p-8"><Loader2 aria-label="Loading" className="animate-spin" /></div>}><PassportContent /></React.Suspense>;
+}
+
+function PassportContent() {
+  const searchParams = useSearchParams();
+  const forceDemo = searchParams.get("demo") === "true";
   const { t, locale } = useLanguage();
+  const { status: authStatus, user } = useAuth();
+  const { truthState, isDemoMode } = useRuntimeTruth();
+
+  const [viewStatus, setViewStatus] = useState<PassportViewStatus>("loading");
+  const [passportData, setPassportData] = useState<PassportModel | null>(null);
   const [activeTab, setActiveTab] = useState<"skills" | "experience" | "rpl">("skills");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [truthState, setTruthState] = useState<"LIVE" | "DEMO_DATA" | "SAVED">("LIVE");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [passportData, setPassportData] = useState<any>({
-    beneficiary_name: "रमेश मेश्राम (Ramesh Mesram)",
-    district: "नागपूर ग्रामीण (Nagpur Rural)",
-    district_code: "MH-NAG",
-    qr_code_token: "LIP-MH-NAG-2026-88",
-    is_verifiable: true,
-    skills: [
-      {
-        id: "sk-1",
-        name: "Two-Wheeler Engine Overhaul",
-        name_mr: "इंजिन दुरुस्ती व सुटे भाग जोडणी",
-        status: "verified",
-        confidence: 92,
-        evidence: "मी गॅरेजमध्ये इंजिन उघडणे आणि पिस्टन बदलण्याचे काम करतो.",
-        nsqf_code: "ASC/Q1411",
-        level: "Level 3 Equivalent",
-        source: "spoken_evidence"
-      },
-      {
-        id: "sk-2",
-        name: "Brake System Maintenance",
-        name_mr: "हायड्रॉलिक व ड्रम ब्रेक दुरुस्ती",
-        status: "verified",
-        confidence: 95,
-        evidence: "सर्व प्रकारच्या दुचाकीचे ब्रेक दुरुस्त करतो आणि ऑइल बदलतो.",
-        nsqf_code: "ASC/Q1402",
-        level: "Level 4 Candidate",
-        source: "spoken_evidence"
-      },
-      {
-        id: "sk-3",
-        name: "Workshop Tools & Safety",
-        name_mr: "टूल्स व गॅरेज सुरक्षा नियम",
-        status: "inferred",
-        confidence: 78,
-        evidence: "Inferred from tool context: टॉर्क रिंच, न्यूमॅटिक टूल्स व वेस्ट ऑइल डिस्पोजल.",
-        nsqf_code: "ASC/Q1401",
-        level: "Baseline Fit",
-        source: "ai_inference"
-      }
-    ],
-    experience: {
-      title: "स्वयंरोजगार व गॅरेज अनुभव (Roadside Garage Work)",
-      duration: "४ वर्षे (4 Years)",
-      description: "नागपूर-हिंगणा मार्गावरील स्थानिक ऑटो सर्व्हिस केंद्रात दैनंदिन २००+ दुचाकींचे नियमित मेंटेनन्स, फॉल्ट डायग्नोस्टिक्स व सुटे भागांची जुळवणी.",
-      endorsement: "वॉर्ड कमिटी शिफारस: उपस्थित (Ward Committee Endorsed)",
-      verified: true
-    },
-    rpl: {
-      title: "RPL प्राधान्य मूल्यांकन (Recognition of Prior Learning)",
-      readiness_tier: "Tier 1 Fast Track",
-      bridge_hours: 30,
-      description: "Recognition of Prior Learning अंतर्गत आपल्या व्यावहारिक अनुभवाला शासनमान्य प्रमाणपत्रात रूपांतरित करण्यासाठी ३० तासांचे ओरिएंटेशन सत्र नियोजित करता येईल.",
-      disclaimer: "हे शासकीय प्रमाणपत्र नाही; केवळ संकलित अनुभवावर आधारित कौशल्य शिफारस आहे."
+  const resolvePassport = async () => {
+    setViewStatus("loading");
+    setErrorMsg(null);
+
+    // If explicit demo requested or environment in demo mode
+    if (forceDemo || isDemoMode) {
+      setPassportData(DEMO_PASSPORT);
+      setViewStatus("demo_profile");
+      return;
     }
-  });
 
-  const DEMO_SEED = passportData;
-
-  const loadPassport = async () => {
-    setLoading(true);
-    setError(null);
-    try {
+    // If user is unauthenticated
+    if (authStatus === "unauthenticated") {
       const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
-      const idState = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id_state") : null;
-
-      if (IS_DEMO_MODE && (!storedId || storedId === "demo-beneficiary-id" || idState === "demo")) {
-        setTruthState("DEMO_DATA");
-        setLoading(false);
-        return;
-      }
-
-      if (!storedId || storedId === "demo-beneficiary-id") {
-        if (!IS_DEMO_MODE) {
-          setError(
-            locale === "mr"
-              ? "कोणतेही प्रोफाइल आढळले नाही. कृपया आधी मुलाखत पूर्ण करा."
-              : "No saved profile found. Please complete the voice interview first."
-          );
-          setLoading(false);
-          return;
-        }
-        setTruthState("DEMO_DATA");
-        setLoading(false);
-        return;
-      }
-
-      const apiPassport = await getLivelihoodPassport(storedId);
-      if (apiPassport) {
-        setTruthState("LIVE");
-        setPassportData({
-          beneficiary_name: apiPassport.full_name || DEMO_SEED.beneficiary_name,
-          district: apiPassport.district_code ? `${apiPassport.district_code} (Maharashtra)` : DEMO_SEED.district,
-          district_code: apiPassport.district_code || "MH-NAG",
-          qr_code_token: apiPassport.qr_code_token || `LIP-MH-${storedId.slice(0, 6)}`,
-          is_verifiable: true,
-          skills: apiPassport.skills && apiPassport.skills.length > 0
-            ? apiPassport.skills.map((s: any, idx: number) => ({
+      if (storedId && storedId !== "demo-beneficiary-id") {
+        // Try loading anonymous saved ID if exists
+        try {
+          const res = await getLivelihoodPassport(storedId);
+          if (res && res.skills && res.skills.length > 0) {
+            setPassportData({
+              beneficiary_name: res.full_name || "Beneficiary",
+              district: res.district_code || "MH-NAG",
+              district_code: res.district_code || "MH-NAG",
+              qr_code_token: res.qr_code_token || `LIP-MH-${storedId.slice(0, 6)}`,
+              is_verifiable: true,
+              skills: res.skills.map((s: any, idx: number) => ({
                 id: s.id || `sk-${idx}`,
                 name: s.canonical_name || s.name,
-                name_mr: s.marathi_name || s.canonical_name || s.name,
+                name_mr: s.marathi_name,
                 status: s.verification_status === "beneficiary_confirmed" ? "verified" : "inferred",
-                confidence: Math.round((s.confidence_score || 0.88) * 100),
-                evidence: s.evidence_quote || "मुलाखती दरम्यान नोंदवलेले काम व कौशल्य संदर्भ.",
-                nsqf_code: s.nsqf_code || "ASC/Q1411",
-                level: s.proficiency_band === "competent" ? "Level 3 Equivalent" : "Level 2 / Bridge Needed",
-                source: s.verification_status === "beneficiary_confirmed" ? "spoken_evidence" : "ai_inference"
-              }))
-            : DEMO_SEED.skills,
-          experience: apiPassport.work_experiences && apiPassport.work_experiences.length > 0
-            ? {
-                title: apiPassport.work_experiences[0].title || DEMO_SEED.experience.title,
-                duration: `${apiPassport.work_experiences[0].duration_months || 36} Months`,
-                description: apiPassport.work_experiences[0].description || DEMO_SEED.experience.description,
-                endorsement: "गाव कामगार समिती पडताळणी प्रलंबित",
-                verified: false
-              }
-            : DEMO_SEED.experience,
-          rpl: DEMO_SEED.rpl
-        });
-      }
-    } catch (e: any) {
-      if (IS_DEMO_MODE) {
-        setTruthState("DEMO_DATA");
-      } else {
-        if (e instanceof NetworkError) {
-          setError(locale === "mr" ? "सर्व्हरशी संपर्क होऊ शकला नाही. इंटरनेट तपासा." : "Server unreachable. Please check your connection.");
-        } else {
-          setError(e.message || "Failed to load passport.");
+                confidence: Math.round((s.confidence_score || 0.9) * 100),
+                evidence: s.evidence_utterance || "Spoken trade evidence confirmed during interview.",
+                nsqf_code: s.nsqf_code,
+                level: s.nsqf_level ? `NSQF Level ${s.nsqf_level}` : "NSQF Aligned",
+                source: "spoken_evidence",
+              })),
+              experience: {
+                title: res.work_experiences?.[0]?.title || "Trade Work Experience",
+                duration: `${res.work_experiences?.[0]?.duration_months || 24} Months`,
+                description: res.work_experiences?.[0]?.raw_utterance || "Practical hands-on workshop experience.",
+                verified: true,
+              },
+              rpl: {
+                title: "RPL Readiness Assessment",
+                readiness_tier: "Tier 1 Fast Track",
+                bridge_hours: 30,
+                description: "Eligible for fast-track 30-hour bridge orientation under PM-AJAY.",
+                disclaimer: "Pre-screening assessment result.",
+              },
+            });
+            setViewStatus("authenticated_with_profile");
+            return;
+          }
+        } catch {
+          // Fall through to unauthenticated
         }
       }
-    } finally {
-      setLoading(false);
+      setViewStatus("unauthenticated");
+      return;
+    }
+
+    // Authenticated user resolution via /beneficiaries/me
+    try {
+      const me = await apiFetch<any>("/api/v1/beneficiaries/me");
+      if (!me || !me.id) {
+        setViewStatus("empty");
+        return;
+      }
+
+      const res = await getLivelihoodPassport(me.id);
+      if (res && res.skills && res.skills.length > 0) {
+        setPassportData({
+          beneficiary_name: res.full_name || me.full_name,
+          district: `${res.district_code || me.district_code || "Nagpur"} (Maharashtra)`,
+          district_code: res.district_code || me.district_code || "MH-NAG",
+          qr_code_token: res.qr_code_token || `LIP-MH-${me.id.slice(0, 6)}`,
+          is_verifiable: true,
+          skills: res.skills.map((s: any, idx: number) => ({
+            id: s.id || `sk-${idx}`,
+            name: s.canonical_name || s.name,
+            name_mr: s.marathi_name,
+            status: s.verification_status === "beneficiary_confirmed" ? "verified" : "inferred",
+            confidence: Math.round((s.confidence_score || 0.9) * 100),
+            evidence: s.evidence_utterance || "Spoken trade evidence confirmed during interview.",
+            nsqf_code: s.nsqf_code,
+            level: s.nsqf_level ? `NSQF Level ${s.nsqf_level}` : "NSQF Aligned",
+            source: "spoken_evidence",
+          })),
+          experience: {
+            title: res.work_experiences?.[0]?.title || "Trade Work Experience",
+            duration: `${res.work_experiences?.[0]?.duration_months || 24} Months`,
+            description: res.work_experiences?.[0]?.raw_utterance || "Practical hands-on workshop experience.",
+            verified: true,
+          },
+          rpl: {
+            title: "RPL Readiness Assessment",
+            readiness_tier: "Tier 1 Fast Track",
+            bridge_hours: 30,
+            description: "Eligible for fast-track 30-hour bridge orientation under PM-AJAY.",
+            disclaimer: "Pre-screening assessment result.",
+          },
+        });
+        setViewStatus("authenticated_with_profile");
+      } else {
+        setViewStatus("empty");
+      }
+    } catch (err: any) {
+      if (err.status === 404 || err.message?.includes("404")) {
+        setViewStatus("empty");
+      } else {
+        setErrorMsg(err.message || "Failed to load skills passport from secure server.");
+        setViewStatus("error");
+      }
     }
   };
 
   useEffect(() => {
-    loadPassport();
-  }, []);
+    resolvePassport();
+  }, [authStatus, forceDemo, isDemoMode]);
 
   return (
     <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="flex flex-col relative w-full pt-16 pb-28 min-h-screen">
+      <main className="flex flex-col relative w-full pt-16 pb-36 min-h-screen">
         <div className="flex flex-col w-full max-w-2xl mx-auto px-4 md:px-6">
-          {/* Header Metadata */}
+          {/* Header */}
           <div className="pt-4 pb-2 flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <span className="font-label-sm text-label-sm text-secondary font-bold tracking-wider uppercase">
-                {locale === "mr" ? "राष्ट्रीय कौशल्य नोंदवही • MSDE सुसंगत" : "National Skills Repository • MSDE Alignment"}
-              </span>
-              <TruthBadge state={truthState} />
+            <div className="flex items-center justify-between text-label-sm font-label-sm uppercase tracking-wider text-outline">
+              <span>{t("passport.title", "Skills Passport")}</span>
+              <TruthBadge
+                state={viewStatus === "demo_profile" ? "DEMO_DATA" : viewStatus === "authenticated_with_profile" ? "LIVE" : truthState}
+              />
             </div>
 
-            {/* Main Passport Card */}
-            <div className="bg-surface-container rounded-2xl p-4 md:p-5 shadow-sm relative overflow-hidden mt-1 border border-surface-variant/40">
-              <div className="absolute -right-4 -bottom-6 w-32 h-32 rounded-full bg-surface-variant/40 blur-xl pointer-events-none" />
-              <div className="flex items-start justify-between gap-2 relative z-10">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <Award className="w-5 h-5 text-secondary" />
-                    <h1 className="font-headline-sm text-headline-sm text-on-surface font-bold">
-                      {locale === "mr" ? "उपजीविका पासपोर्ट" : "Livelihood Skills Passport"}
-                    </h1>
-                  </div>
-                  <span className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                    {locale === "mr" ? "सत्यापित कौशल्य व क्षमता दस्तऐवज" : "Verifiable Competency & Livelihood Record"}
-                  </span>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-              </div>
+            <h1 className="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-primary tracking-tight font-bold mt-1">
+              {t("passport.title", "Skills Passport")}
+            </h1>
 
-              {/* Citizen Details Subcard */}
-              <div className="mt-3 pt-3 bg-surface-container-lowest/90 rounded-xl p-3 flex flex-col gap-1.5 shadow-sm border border-surface-variant/30">
-                <div className="flex items-center justify-between">
-                  <span className="font-title-md text-title-md text-primary font-bold">
-                    {passportData.beneficiary_name}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-on-tertiary-container font-label-sm text-label-sm bg-tertiary-fixed/30 px-2 py-0.5 rounded-full font-semibold">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-secondary" />
-                    {locale === "mr" ? "पडताळणीयोग्य" : "Verifiable"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-on-surface-variant">
-                  <span className="font-body-sm text-body-sm flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-secondary" />
-                    {passportData.district}
-                  </span>
-                  <span className="font-code-sm text-code-sm text-outline font-semibold">
-                    {passportData.qr_code_token}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+              {t("passport.subtitle", "Portable, verifiable digital credential of your informal experience and competency cluster.")}
+            </p>
           </div>
 
-          {/* Loading / Error States */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center p-12 gap-3 text-on-surface-variant">
-              <Loader2 className="w-8 h-8 animate-spin text-secondary" />
-              <p className="font-body-md text-body-md font-medium">
-                {locale === "mr" ? "पासपोर्ट लोड होत आहे..." : "Loading skills passport..."}
-              </p>
+          {/* STATE 1: LOADING */}
+          {viewStatus === "loading" && (
+            <div className="mt-8 p-12 text-center bg-surface-container-lowest rounded-2xl border border-outline-variant/30 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="text-sm font-medium text-on-surface-variant">
+                Loading your skills credential...
+              </span>
             </div>
           )}
 
-          {error && !loading && (
-            <div className="mt-4 p-4 rounded-xl bg-error-container/40 border border-error/20 flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-error font-semibold font-title-md">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <span>{error}</span>
+          {/* STATE 2: UNAUTHENTICATED */}
+          {viewStatus === "unauthenticated" && (
+            <div className="mt-6 p-8 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-primary-container/20 text-primary flex items-center justify-center ring-8 ring-primary-container/10">
+                <BadgeCheck className="w-8 h-8" />
               </div>
-              <div className="flex gap-2">
+
+              <div className="space-y-1 max-w-md">
+                <h2 className="text-xl font-bold text-on-surface">
+                  Create Your Skills Passport
+                </h2>
+                <p className="text-sm text-on-surface-variant leading-relaxed">
+                  Speak about your trade experience to generate your recognized competency cluster and unlock PM-AJAY livelihood pathways.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm pt-2">
                 <Link
                   href="/interview"
-                  className="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold"
+                  className="flex-1 min-h-[46px] rounded-xl bg-primary text-on-primary font-title-md text-sm font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-primary/90 transition-colors"
                 >
-                  {locale === "mr" ? "मुलाखत सुरू करा" : "Start Interview"}
+                  <Mic className="w-4 h-4" />
+                  <span>{t("home.pipeline.step1_title", "Start Voice Intake")}</span>
                 </Link>
-                <button
-                  type="button"
-                  onClick={loadPassport}
-                  className="px-4 py-2 rounded-lg bg-surface-container-high text-primary font-label-md text-label-md font-semibold"
+                <Link
+                  href="/login"
+                  className="flex-1 min-h-[46px] rounded-xl bg-surface-container-high text-on-surface font-title-md text-sm font-medium flex items-center justify-center gap-2 border border-outline-variant/40 hover:bg-surface-container-highest transition-colors"
                 >
-                  {locale === "mr" ? "पुन्हा प्रयत्न करा" : "Retry"}
+                  <LogIn className="w-4 h-4" />
+                  <span>{t("nav.login", "Sign In")}</span>
+                </Link>
+              </div>
+
+              <div className="pt-4 border-t border-outline-variant/20 text-xs text-on-surface-variant">
+                Want to see a preview?{" "}
+                <button
+                  onClick={() => {
+                    setPassportData(DEMO_PASSPORT);
+                    setViewStatus("demo_profile");
+                  }}
+                  className="text-primary font-bold hover:underline"
+                >
+                  Explore sample demo passport
                 </button>
               </div>
             </div>
           )}
 
-          {!loading && !error && (
-            <>
-              {/* 3-Tab Filter Pill */}
-              <div className="mt-3">
-                <div className="bg-surface-container-high p-1 rounded-xl flex items-center gap-1 shadow-sm">
-                  <button
-                    id="tab-btn-skills"
-                    type="button"
-                    onClick={() => setActiveTab("skills")}
-                    className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
-                      activeTab === "skills"
-                        ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                        : "text-on-surface-variant hover:text-on-surface font-semibold"
-                    }`}
-                  >
-                    {locale === "mr" ? "प्रमाणित कौशल्ये" : "Verified Skills"}
-                    <span className="block font-label-sm text-label-sm text-secondary font-normal">
-                      Skills ({passportData.skills?.length || 0})
-                    </span>
-                  </button>
-
-                  <button
-                    id="tab-btn-experience"
-                    type="button"
-                    onClick={() => setActiveTab("experience")}
-                    className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
-                      activeTab === "experience"
-                        ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                        : "text-on-surface-variant hover:text-on-surface font-semibold"
-                    }`}
-                  >
-                    {locale === "mr" ? "अनुभव" : "Work History"}
-                    <span className="block font-label-sm text-label-sm text-outline font-normal">
-                      {passportData.experience?.duration || "History"}
-                    </span>
-                  </button>
-
-                  <button
-                    id="tab-btn-rpl"
-                    type="button"
-                    onClick={() => setActiveTab("rpl")}
-                    className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
-                      activeTab === "rpl"
-                        ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                        : "text-on-surface-variant hover:text-on-surface font-semibold"
-                    }`}
-                  >
-                    {locale === "mr" ? "RPL पात्रता" : "RPL Readiness"}
-                    <span className="block font-label-sm text-label-sm text-outline font-normal">
-                      {passportData.rpl?.readiness_tier || "Tier 1"}
-                    </span>
-                  </button>
-                </div>
+          {/* STATE 3: AUTHENTICATED BUT EMPTY */}
+          {viewStatus === "empty" && (
+            <div className="mt-6 p-8 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-secondary-fixed/30 text-secondary flex items-center justify-center ring-8 ring-secondary-fixed/10">
+                <Wrench className="w-8 h-8" />
               </div>
 
-              {/* Tab 1: Skills Stream */}
-              {activeTab === "skills" && (
-                <div className="flex flex-col gap-3 mt-3">
-                  {passportData.skills && passportData.skills.length > 0 ? (
-                    passportData.skills.map((skill: any) => (
-                      <div
-                        key={skill.id}
-                        className="bg-surface-container-lowest rounded-xl p-4 shadow-sm border border-surface-variant/30 flex flex-col gap-2.5 transition-transform active:scale-[0.99]"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-lg bg-secondary-fixed/50 flex items-center justify-center text-on-secondary-fixed shrink-0">
-                              <Wrench className="w-5 h-5 text-secondary" />
-                            </div>
+              <div className="space-y-1 max-w-md">
+                <h2 className="text-xl font-bold text-on-surface">
+                  {t("passport.empty_title", "You have not created your skills passport yet.")}
+                </h2>
+                <p className="text-sm text-on-surface-variant leading-relaxed">
+                  {t("passport.empty_desc", "Describe your daily work to generate your verified competency profile and RPL readiness.")}
+                </p>
+              </div>
+
+              <Link
+                href="/interview"
+                className="min-h-[48px] px-6 rounded-xl bg-primary text-on-primary font-title-md text-sm font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-primary/90 transition-colors mt-2"
+              >
+                <Mic className="w-4 h-4" />
+                <span>{t("passport.empty_btn", "Start Voice Assessment")}</span>
+              </Link>
+            </div>
+          )}
+
+          {/* STATE 4: ERROR */}
+          {viewStatus === "error" && (
+            <div className="mt-6 p-6 bg-error-container/20 border border-error/30 rounded-2xl flex flex-col items-center text-center gap-4">
+              <AlertCircle className="w-8 h-8 text-error" />
+              <div>
+                <h3 className="font-bold text-lg text-on-surface">Unable to load skills credential</h3>
+                <p className="text-sm text-on-surface-variant mt-1">{errorMsg}</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={resolvePassport}
+                  className="px-4 py-2 bg-error text-on-error rounded-xl font-medium text-sm flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>{t("action.retry", "Try Again")}</span>
+                </button>
+                <Link
+                  href="/interview"
+                  className="px-4 py-2 bg-surface-container-high text-on-surface rounded-xl font-medium text-sm border border-outline-variant/30"
+                >
+                  <span>Go to Voice Intake</span>
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* STATE 5 & 6: AUTHENTICATED WITH PROFILE OR DEMO PROFILE */}
+          {(viewStatus === "authenticated_with_profile" || viewStatus === "demo_profile") && passportData && (
+            <div className="flex flex-col gap-6 mt-4">
+              {/* Sovereign Civic Passport Card */}
+              <div className="bg-surface-container-lowest rounded-3xl shadow-xl border border-surface-variant/40 overflow-hidden flex flex-col">
+                {/* Hero Header with Occupation Imagery */}
+                <div className="relative w-full h-44 sm:h-48 bg-[#001428]">
+                  <Image
+                    src="/images/occupations/mechanic.webp"
+                    alt="Occupation context"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 600px"
+                    className="object-cover opacity-60"
+                    priority={false}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#001428] via-[#001428]/40 to-transparent" />
+
+                  <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-lowest/90 backdrop-blur-md text-primary font-label-sm text-label-sm font-bold shadow-sm">
+                      <ShieldCheck className="w-4 h-4 text-secondary" />
+                      <span>PM-AJAY Skills Passport</span>
+                    </span>
+                    <TruthBadge state={viewStatus === "demo_profile" ? "DEMO_DATA" : "LIVE"} />
+                  </div>
+
+                  <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+                    <div>
+                      <span className="text-secondary-fixed text-xs font-semibold uppercase tracking-wider">
+                        Verified Citizen Profile
+                      </span>
+                      <h2 className="text-2xl font-bold text-white tracking-tight">
+                        {passportData.beneficiary_name}
+                      </h2>
+                      <div className="flex items-center gap-1.5 text-slate-300 text-xs mt-0.5">
+                        <MapPin className="w-3.5 h-3.5 text-secondary" />
+                        <span>{passportData.district}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-12 h-12 rounded-xl bg-white p-1 shadow-md shrink-0 flex items-center justify-center">
+                      <QrCode className="w-10 h-10 text-primary" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-header Navigation Tabs */}
+                <div className="grid grid-cols-3 border-b border-surface-variant/30 bg-surface-container-low" role="tablist">
+                  <button
+                    onClick={() => setActiveTab("skills")}
+                    role="tab"
+                    aria-selected={activeTab === "skills"}
+                    className={`min-h-[46px] font-label-md text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                      activeTab === "skills"
+                        ? "border-primary text-primary bg-surface-container-lowest"
+                        : "border-transparent text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <BadgeCheck className="w-4 h-4 text-secondary" />
+                    <span>Skills ({passportData.skills.length})</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("experience")}
+                    role="tab"
+                    aria-selected={activeTab === "experience"}
+                    className={`min-h-[46px] font-label-md text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                      activeTab === "experience"
+                        ? "border-primary text-primary bg-surface-container-lowest"
+                        : "border-transparent text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <Briefcase className="w-4 h-4 text-secondary" />
+                    <span>Experience</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("rpl")}
+                    role="tab"
+                    aria-selected={activeTab === "rpl"}
+                    className={`min-h-[46px] font-label-md text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
+                      activeTab === "rpl"
+                        ? "border-primary text-primary bg-surface-container-lowest"
+                        : "border-transparent text-on-surface-variant hover:text-on-surface"
+                    }`}
+                  >
+                    <Award className="w-4 h-4 text-secondary" />
+                    <span>RPL Readiness</span>
+                  </button>
+                </div>
+
+                {/* Tab Contents */}
+                <div className="p-4 sm:p-6">
+                  {/* TAB 1: SKILLS */}
+                  {activeTab === "skills" && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-xs uppercase font-bold tracking-wider text-outline">
+                          Demonstrated Trade Competencies
+                        </span>
+                        <ReadAloudButton
+                          text={`Verified skills: ${passportData.skills.map((s) => s.name).join(", ")}`}
+                          label={t("action.listen", "Listen")}
+                          size="sm"
+                        />
+                      </div>
+
+                      {passportData.skills.map((skill) => (
+                        <div
+                          key={skill.id}
+                          className="p-3.5 rounded-xl bg-surface-container-low border border-surface-variant/30 flex flex-col gap-2 transition-all hover:bg-surface-container"
+                        >
+                          <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h2 className="font-title-md text-title-md text-on-surface font-bold">
+                              <h3 className="font-bold text-base text-primary">
                                 {skill.name}
-                              </h2>
-                              <span className="font-body-sm text-body-sm text-secondary font-semibold">
-                                {skill.name_mr}
-                              </span>
+                              </h3>
+                              <p className="text-xs text-on-surface-variant mt-0.5 font-medium">
+                                {skill.evidence}
+                              </p>
                             </div>
-                          </div>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-primary-fixed-variant font-label-sm text-label-sm shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                            {skill.status === "verified"
-                              ? locale === "mr" ? "खात्री केली" : "Verified"
-                              : locale === "mr" ? "अनुमानित" : "Inferred"}
-                          </span>
-                        </div>
-
-                        {/* Verbatim Spoken Evidence / Inference Box */}
-                        <div className="bg-surface-container-low rounded-lg p-3 my-0.5 flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider flex items-center gap-1 font-semibold">
-                              <Mic className="w-3.5 h-3.5 text-secondary" />
-                              {skill.source === "spoken_evidence"
-                                ? locale === "mr" ? "प्रत्यक्ष उच्चारित पुरावा" : "Verbatim Spoken Evidence"
-                                : locale === "mr" ? "एआय तर्क मॉडेल" : "AI Inferred Evidence"}
-                            </span>
-                            <ReadAloudButton
-                              text={`${skill.name}. ${skill.name_mr}. ${skill.evidence}`}
-                              label={locale === "mr" ? "ऐका" : "Listen"}
-                              size="sm"
-                            />
-                          </div>
-                          <p className="font-body-md text-body-md text-on-surface italic">
-                            “{skill.evidence}”
-                          </p>
-                        </div>
-
-                        {/* Percentage bar & Competency fit */}
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="flex items-center gap-2 flex-1 mr-3">
-                            <div className="w-full bg-surface-container rounded-full h-2 overflow-hidden">
-                              <div
-                                className="bg-secondary h-2 rounded-full transition-all duration-500"
-                                style={{ width: `${skill.confidence}%` }}
-                              />
-                            </div>
-                            <span className="font-label-md text-label-md text-on-surface font-bold shrink-0">
-                              {skill.confidence}%
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-sm text-xs font-bold shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-secondary" />
+                              <span>{skill.confidence}% Fit</span>
                             </span>
                           </div>
-                          <span className="font-label-sm text-label-sm text-on-surface-variant shrink-0">
-                            {locale === "mr" ? "कौशल्य जुळणी" : "Competency Fit"}
+
+                          <div className="flex items-center gap-2 pt-1 border-t border-surface-variant/20 text-xs text-outline">
+                            <span className="font-semibold text-secondary">{skill.level || "NSQF Level 3"}</span>
+                            <span>•</span>
+                            <span>{skill.nsqf_code || "ASC/Q1411"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* TAB 2: EXPERIENCE */}
+                  {activeTab === "experience" && (
+                    <div className="flex flex-col gap-4">
+                      <div className="p-4 rounded-xl bg-surface-container-low border border-surface-variant/30 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-base text-primary">
+                            {passportData.experience.title}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary font-bold text-xs">
+                            {passportData.experience.duration}
                           </span>
                         </div>
+                        <p className="text-sm text-on-surface leading-relaxed">
+                          {passportData.experience.description}
+                        </p>
+                        {passportData.experience.endorsement && (
+                          <div className="mt-1 inline-flex items-center gap-1.5 text-xs text-secondary font-semibold">
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>{passportData.experience.endorsement}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-                        {/* NSQF Code */}
-                        <div className="flex items-center justify-between text-label-sm font-label-sm text-outline pt-0.5 border-t border-surface-variant/20">
-                          <span>Mapped NSQF Code: {skill.nsqf_code}</span>
-                          <span className="text-secondary font-semibold">{skill.level}</span>
+                  {/* TAB 3: RPL READINESS */}
+                  {activeTab === "rpl" && (
+                    <div className="flex flex-col gap-4">
+                      <div className="p-4 rounded-xl bg-surface-container-low border border-surface-variant/30 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-base text-primary">
+                            {passportData.rpl.title}
+                          </span>
+                          <span className="px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-bold text-xs">
+                            {passportData.rpl.readiness_tier}
+                          </span>
+                        </div>
+                        <p className="text-sm text-on-surface leading-relaxed">
+                          {passportData.rpl.description}
+                        </p>
+                        <div className="p-3 rounded-lg bg-surface-container text-xs text-on-surface-variant flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-secondary shrink-0" />
+                          <span>{passportData.rpl.disclaimer}</span>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center bg-surface-container-lowest rounded-xl border border-surface-variant/30 flex flex-col items-center gap-2">
-                      <Wrench className="w-10 h-10 text-outline" />
-                      <p className="font-title-md text-on-surface font-bold">
-                        {locale === "mr" ? "कोणतेही कौशल्य आढळले नाही" : "No Skills Recorded Yet"}
-                      </p>
-                      <p className="font-body-sm text-on-surface-variant">
-                        {locale === "mr"
-                          ? "प्रथम आपल्या दैनंदिन कामाबद्दल बोलून मुलाखत पूर्ण करा."
-                          : "Speak about your daily work to extract and verify your skills."}
-                      </p>
-                      <Link
-                        href="/interview"
-                        className="mt-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-bold"
-                      >
-                        {locale === "mr" ? "मुलाखत द्या" : "Start Voice Intake"}
-                      </Link>
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Tab 2: Experience Stream */}
-              {activeTab === "experience" && (
-                <div className="flex flex-col gap-3 mt-3">
-                  <div className="bg-surface-container-lowest rounded-xl p-4 shadow-sm border border-surface-variant/30 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-title-md text-title-md text-primary font-bold">
-                        {passportData.experience.title}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-bold">
-                        {passportData.experience.duration}
-                      </span>
-                    </div>
-                    <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-                      {passportData.experience.description}
-                    </p>
-                    <div className="mt-2 pt-2 bg-surface-container-low rounded-lg p-2.5 flex items-center justify-between border border-surface-variant/20">
-                      <span className="font-label-sm text-label-sm text-outline">
-                        {passportData.experience.endorsement}
-                      </span>
-                      <ShieldCheck className="w-5 h-5 text-secondary" />
-                    </div>
-                  </div>
+                {/* Footer Action Strip */}
+                <div className="p-4 bg-surface-container-low border-t border-surface-variant/30 flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/pathways"
+                    className="flex-1 min-h-[48px] rounded-xl bg-primary text-on-primary font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-primary/90 transition-colors"
+                  >
+                    <span>{t("nav.my_paths", "Explore Matching Pathways")}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                  <button
+                    onClick={() => {
+                      if (typeof window !== "undefined") window.print();
+                    }}
+                    className="min-h-[48px] px-4 rounded-xl bg-surface-container-high text-on-surface font-medium text-sm flex items-center justify-center gap-2 border border-outline-variant/30 hover:bg-surface-container-highest transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download</span>
+                  </button>
                 </div>
-              )}
-
-              {/* Tab 3: RPL Readiness */}
-              {activeTab === "rpl" && (
-                <div className="flex flex-col gap-3 mt-3">
-                  <div className="bg-surface-container-lowest rounded-xl p-4 shadow-sm border border-surface-variant/30 flex flex-col gap-2.5">
-                    <span className="font-title-md text-title-md text-primary font-bold">
-                      {passportData.rpl.title}
-                    </span>
-                    <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-                      {passportData.rpl.description}
-                    </p>
-                    <div className="flex items-center justify-between bg-surface-container p-2.5 rounded-lg mt-1 border border-surface-variant/20">
-                      <span className="font-label-md text-label-md text-primary font-bold">
-                        {locale === "mr" ? "पात्रता स्थिती:" : "Readiness Tier:"}
-                      </span>
-                      <span className="font-label-md text-label-md text-on-tertiary-container font-bold bg-tertiary-fixed/30 px-2 py-0.5 rounded">
-                        {passportData.rpl.readiness_tier}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* RPL Bridge Card */}
-                  <div className="bg-secondary-fixed/30 rounded-xl p-4 shadow-sm border border-secondary/20 flex flex-col gap-2">
-                    <div className="flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-secondary text-on-secondary flex items-center justify-center shrink-0">
-                        <Sparkles className="w-5 h-5" />
-                      </div>
-                      <div className="flex flex-col">
-                        <h3 className="font-title-md text-title-md text-on-secondary-fixed font-bold leading-tight">
-                          {locale === "mr" ? "तुम्ही RPL ब्रिजसाठी पात्र आहात" : "RPL Fast-Track Eligible"}
-                        </h3>
-                        <span className="font-label-sm text-label-sm text-secondary font-semibold">
-                          Recognition of Prior Learning Pathway
-                        </span>
-                      </div>
-                    </div>
-                    <p className="font-body-md text-body-md text-on-surface mt-1 leading-relaxed">
-                      {locale === "mr" ? (
-                        <>४५० तासांच्या नियमित वर्गाऐवजी फक्त <strong className="text-secondary">३० तासांच्या ब्रिज मॉड्युलने</strong> थेट कौशल्य प्रमाणपत्राकडे वाटचाल शक्य.</>
-                      ) : (
-                        <>Instead of 450 hours of standard training, a fast-track <strong className="text-secondary">30-hour bridge module</strong> prepares you for formal skill certification.</>
-                      )}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2 pt-2 bg-surface-container-lowest/80 rounded-lg p-2.5 border border-surface-variant/30">
-                      <AlertCircle className="w-4 h-4 text-outline shrink-0" />
-                      <span className="font-body-sm text-body-sm text-outline-variant font-medium leading-snug">
-                        {passportData.rpl.disclaimer}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Bottom CTA to My Paths */}
-              <div className="mt-6 mb-4">
-                <Link
-                  href="/pathways"
-                  className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-primary text-on-primary flex items-center justify-center gap-2 shadow-md active:bg-primary-container transition-all group font-title-md text-title-md font-bold"
-                >
-                  <span>{locale === "mr" ? "माझे पर्याय पहा" : "Explore My Paths"}</span>
-                  <span className="font-body-md text-body-md text-primary-fixed-dim font-medium">
-                    (3 Matched)
-                  </span>
-                  <ArrowRight className="w-5 h-5 text-on-primary transition-transform group-hover:translate-x-1" />
-                </Link>
               </div>
-            </>
+            </div>
           )}
         </div>
       </main>

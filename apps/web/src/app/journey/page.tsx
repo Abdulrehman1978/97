@@ -1,488 +1,164 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Check, RefreshCw, ArrowRight, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { BeneficiaryNav } from "@/components/BeneficiaryNav";
 import { ReadAloudButton } from "@/components/ReadAloudButton";
 import { TruthBadge } from "@/components/TruthBadge";
 import { useLanguage } from "@/lib/language-context";
-import { getJourneyHome, updateActionStatus } from "@/lib/api";
-import {
-  CheckCircle2,
-  Clock,
-  MapPin,
-  AlertCircle,
-  PhoneCall,
-  RefreshCw,
-  ListChecks,
-  Check,
-  ShieldCheck,
-  Loader2,
-  CloudCheck,
-  WifiOff,
-  HelpCircle,
-  Calendar,
-  AlertTriangle
-} from "lucide-react";
+import { useRuntimeTruth } from "@/lib/runtime-truth-context";
+import { useAuth } from "@/lib/api/auth-context";
+import { getMyJourney, updateActionStatus } from "@/lib/api";
+import type { JourneyAction, JourneyHome } from "@/lib/api/contracts";
+
+const COPY = {
+  en: {
+    title: "Your next step", journey: "My journey", loading: "Loading your saved progress…",
+    signIn: "Sign in to see your saved journey.", login: "Sign in",
+    empty: "Choose a pathway to begin your action plan.", choose: "See my options",
+    noActions: "No actions have been recorded for this pathway yet.", help: "Ask for help",
+    complete: "Mark as complete", reopen: "Reopen", done: "Complete", upcoming: "To do",
+    allDone: "All recorded actions are complete.", next: "Discuss your next milestone with your counsellor.",
+    progress: "completed", refresh: "Refresh saved progress", saved: "Loaded from the server",
+    offline: "An internet connection is required to save. Unsaved actions are not queued.",
+    error: "We could not load your journey. Reconnect or sign in again, then retry.",
+    saveError: "This change could not be confirmed. Your previous status is unchanged; refresh before retrying.",
+    retry: "Retry", detail: "Details", notApproval: "Progress tracking is not proof of certification, placement or funding.",
+  },
+  mr: {
+    title: "तुमची पुढील कृती", journey: "माझा प्रवास", loading: "जतन केलेली प्रगती आणत आहोत…",
+    signIn: "तुमची जतन केलेली प्रगती पाहण्यासाठी प्रवेश करा.", login: "प्रवेश करा",
+    empty: "कृती आराखडा सुरू करण्यासाठी मार्ग निवडा.", choose: "माझे पर्याय पाहा",
+    noActions: "या मार्गासाठी अद्याप कोणतीही कृती नोंदवलेली नाही.", help: "मदत घ्या",
+    complete: "पूर्ण झाल्याची नोंद करा", reopen: "पुन्हा उघडा", done: "पूर्ण", upcoming: "करायचे आहे",
+    allDone: "नोंदवलेल्या सर्व कृती पूर्ण झाल्या.", next: "पुढील टप्प्याबद्दल समुपदेशकाशी बोला.",
+    progress: "पूर्ण", refresh: "जतन केलेली प्रगती पुन्हा पाहा", saved: "सर्व्हरवरील नोंद पाहत आहात",
+    offline: "जतन करण्यासाठी इंटरनेट आवश्यक आहे. न जतन केलेल्या कृती नंतर आपोआप पाठवल्या जात नाहीत.",
+    error: "तुमची प्रगती आणता आली नाही. इंटरनेट तपासा किंवा पुन्हा प्रवेश करून प्रयत्न करा.",
+    saveError: "बदल जतन झाल्याची खात्री करता आली नाही. आधीची स्थिती कायम आहे; पुन्हा प्रयत्न करण्यापूर्वी प्रगती तपासा.",
+    retry: "पुन्हा प्रयत्न करा", detail: "तपशील", notApproval: "प्रगतीची नोंद म्हणजे प्रमाणपत्र, रोजगार किंवा निधी मंजुरी नाही.",
+  },
+  hi: {
+    title: "आपका अगला कदम", journey: "मेरी यात्रा", loading: "सहेजी गई प्रगति ला रहे हैं…",
+    signIn: "अपनी सहेजी गई यात्रा देखने के लिए प्रवेश करें.", login: "प्रवेश करें",
+    empty: "कार्य योजना शुरू करने के लिए रास्ता चुनें.", choose: "मेरे विकल्प देखें",
+    noActions: "इस रास्ते के लिए अभी कोई कार्य दर्ज नहीं है.", help: "मदद लें",
+    complete: "पूरा होने की पुष्टि करें", reopen: "फिर खोलें", done: "पूरा", upcoming: "करना बाकी",
+    allDone: "सभी दर्ज कार्य पूरे हो गए हैं.", next: "अगले चरण के बारे में परामर्शदाता से बात करें.",
+    progress: "पूरा", refresh: "सहेजी गई प्रगति फिर देखें", saved: "सर्वर से प्राप्त रिकॉर्ड",
+    offline: "सहेजने के लिए इंटरनेट ज़रूरी है। बिना सहेजे कार्य बाद में अपने आप नहीं भेजे जाते.",
+    error: "आपकी यात्रा लोड नहीं हुई। इंटरनेट जाँचें या फिर प्रवेश करके दोबारा प्रयास करें.",
+    saveError: "बदलाव की पुष्टि नहीं हुई। पिछली स्थिति बनी हुई है; दोबारा प्रयास से पहले प्रगति फिर देखें.",
+    retry: "दोबारा प्रयास करें", detail: "विवरण", notApproval: "प्रगति का रिकॉर्ड प्रमाणपत्र, नौकरी या वित्तीय मंज़ूरी नहीं है.",
+  },
+};
+
+const ACTION_TITLES: Record<string, { en: string; mr: string; hi: string }> = {
+  document_collection: { en: "Check which documents you need", mr: "आवश्यक कागदपत्रे तपासा", hi: "ज़रूरी दस्तावेज़ जाँचें" },
+  rpl_precheck: { en: "Arrange a practical skill assessment", mr: "प्रत्यक्ष कौशल्य तपासणी ठरवा", hi: "व्यावहारिक कौशल जाँच तय करें" },
+  enrollment_or_enterprise: { en: "Review training or enterprise support", mr: "प्रशिक्षण किंवा व्यवसाय मदत तपासा", hi: "प्रशिक्षण या व्यवसाय सहायता जाँचें" },
+  placement_linkage: { en: "Discuss work or enterprise opportunities", mr: "रोजगार किंवा व्यवसाय पर्यायांबद्दल बोला", hi: "रोजगार या व्यवसाय विकल्पों पर चर्चा करें" },
+};
 
 export default function JourneyPage() {
-  const { t, locale } = useLanguage();
-
+  const { locale } = useLanguage();
+  const { status } = useAuth();
+  const { truthState } = useRuntimeTruth();
+  const copy = COPY[locale];
+  const [journey, setJourney] = useState<JourneyHome | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updatingActionId, setUpdatingActionId] = useState<string | null>(null);
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<string>("शेवटचा सिंक: २ मिनिटांपूर्वी");
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [truthState, setTruthState] = useState<"LIVE" | "DEMO_DATA" | "OFFLINE_QUEUED">("LIVE");
+  const [loadError, setLoadError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
 
-  const [pathwayTitle, setPathwayTitle] = useState("Automotive Two-Wheeler Technician");
-  const [pathwayLevel, setPathwayLevel] = useState("NSQF L3 RPL");
-  const [progressPct, setProgressPct] = useState(25);
-
-  const [checklist, setChecklist] = useState([
-    { id: "chk-1", text: "आधार कार्ड (मूळ + २ छायाप्रती)", checked: true },
-    { id: "chk-2", text: "बँक पासबुक / रद्द केलेला चेक", checked: false },
-    { id: "chk-3", text: "जातीचा दाखला / अधिवास प्रमाणपत्र", checked: false }
-  ]);
-
-  const [actions, setActions] = useState<any[]>([
-    {
-      id: "act-1",
-      stepNum: 1,
-      title: "कागदपत्रे गोळा करणे",
-      title_en: "Scheme Documents & Verification",
-      desc: "शासकीय अनुदानासाठी आणि RPL नोंदणीसाठी जातीचा दाखला (Caste Certificate), आधार कार्ड आणि बँक पासबुक एकत्र ठेवा.",
-      due_text: "मुदत: पुढील ७ दिवसांत (Within 7 days)",
-      status: "in_progress", // "completed" | "in_progress" | "pending" | "offline_queued"
-      completed: false
-    },
-    {
-      id: "act-2",
-      stepNum: 2,
-      title: "प्रत्यक्ष कौशल्य पडताळणी",
-      title_en: "Hands-on Skill Check (VTC Nagpur)",
-      desc: "हिंगणा येथील अधिकृत कौशल्य केंद्रावर १ दिवसाची प्रत्यक्ष प्रात्यक्षिक परीक्षा व टूल हँडलिंग मूल्यमापन.",
-      due_text: "पुढील पायरी",
-      status: "pending",
-      completed: false
-    },
-    {
-      id: "act-3",
-      stepNum: 3,
-      title: "मोफत पीएम-अजय बॅच प्रवेश",
-      title_en: "Batch Enrollment (PM-AJAY-NAG-2026)",
-      desc: "शासकीय ३०-तास RPL ब्रिज प्रशिक्षण वर्गामध्ये प्रवेश निश्चित करणे.",
-      due_text: "नियोजित",
-      status: "pending",
-      completed: false
-    },
-    {
-      id: "act-4",
-      stepNum: 4,
-      title: "रोजगार व टूल किट लिंकेज",
-      title_en: "Placement Linkage & Tool Grant",
-      desc: "महिंद्रा फर्स्ट चॉईस सर्व्हिस नेटवर्कमध्ये मुलाखत किंवा ₹५०,००० टूल किट अनुदान.",
-      due_text: "अंतिम टप्पा",
-      status: "pending",
-      completed: false
-    }
-  ]);
-
-  const fetchJourney = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    setMutationError(null);
+    setLoadError(false);
     try {
-      const storedId = typeof window !== "undefined" ? localStorage.getItem("lip_beneficiary_id") : null;
-      const idToFetch = storedId || "demo-beneficiary-id";
-
-      if (idToFetch.includes("demo")) {
-        setTruthState("DEMO_DATA");
-      } else {
-        setTruthState("LIVE");
-      }
-
-      const data = await getJourneyHome(idToFetch);
-      if (data) {
-        if (data.active_pathway?.title) {
-          setPathwayTitle(data.active_pathway.title);
-        }
-        if (data.action_plan && data.action_plan.length > 0) {
-          const mapped = data.action_plan.map((a: any, idx: number) => ({
-            id: a.id || `act-${idx + 1}`,
-            stepNum: idx + 1,
-            title: a.title,
-            title_en: a.title_en || a.title,
-            desc: a.description || "आवश्यक कृती तपशील",
-            due_text: a.due_date ? `मुदत: ${a.due_date}` : "पुढील १४ दिवस",
-            status: a.status === "completed" ? "completed" : idx === 0 ? "in_progress" : "pending",
-            completed: a.status === "completed"
-          }));
-          setActions(mapped);
-
-          const completedCount = mapped.filter((m: any) => m.completed).length;
-          setProgressPct(Math.round(((completedCount || 1) / mapped.length) * 100));
-        }
-      }
-    } catch (err: any) {
-      console.warn("Using resilient journey defaults:", err);
-      setTruthState("DEMO_DATA");
+      setJourney(await getMyJourney());
+      setLoadedAt(new Date());
+    } catch {
+      setJourney(null);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchJourney();
   }, []);
 
-  const handleToggleChecklist = (id: string) => {
-    setChecklist((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, checked: !c.checked } : c))
-    );
-  };
+  useEffect(() => {
+    if (status === "checking") return;
+    if (status === "authenticated") void load();
+    else { setJourney(null); setLoading(false); }
+  }, [status, load]);
 
-  // NON-OPTIMISTIC MUTATION SEQUENCE
-  const handleMarkActionComplete = async (actionId: string) => {
-    setUpdatingActionId(actionId);
-    setMutationError(null);
-
-    const targetAction = actions.find((a) => a.id === actionId);
-    if (!targetAction) {
-      setUpdatingActionId(null);
-      return;
-    }
-
-    const nextCompleted = !targetAction.completed;
-    const nextStatus = nextCompleted ? "completed" : "pending";
-
+  const mark = async (action: JourneyAction) => {
+    if (updatingId) return;
+    setUpdatingId(action.id);
+    setSaveError(false);
+    const nextStatus = action.status === "completed" ? "pending" : "completed";
     try {
-      const res = await updateActionStatus(actionId, nextStatus);
-
-      // Inspect authoritative response
-      if ((res as any)?.is_offline || (res as any)?.status === "offline_queued") {
-        setTruthState("OFFLINE_QUEUED");
-        setActions((prev) =>
-          prev.map((a) =>
-            a.id === actionId
-              ? { ...a, status: "offline_queued", due_text: "Queued on this device — not yet saved" }
-              : a
-          )
-        );
-      } else {
-        // Success verified from backend
-        setActions((prev) =>
-          prev.map((a) =>
-            a.id === actionId
-              ? { ...a, completed: nextCompleted, status: nextCompleted ? "completed" : "in_progress" }
-              : a
-          )
-        );
-        const updatedCompleted = actions.filter((a) => a.id === actionId ? nextCompleted : a.completed).length;
-        setProgressPct(Math.round((updatedCompleted / actions.length) * 100));
-      }
-    } catch (err: any) {
-      // DO NOT set completed on failure
-      console.error("Action status update failed:", err);
-      setMutationError(
-        locale === "mr"
-          ? "कृती जतन करता आली नाही. कृपया इंटरनेट तपासा आणि पुन्हा प्रयत्न करा."
-          : "Action could not be saved. Please check connection and try again."
-      );
+      const response = await updateActionStatus(action.id, nextStatus);
+      if (response.action_id !== action.id || response.new_status !== nextStatus) throw new Error("Unconfirmed mutation");
+      setJourney(current => current ? {
+        ...current,
+        action_plan: current.action_plan.map(item => item.id === action.id ? { ...item, status: nextStatus } : item)
+      } : null);
+      setLoadedAt(new Date());
+    } catch {
+      setSaveError(true);
     } finally {
-      setUpdatingActionId(null);
+      setUpdatingId(null);
     }
   };
 
-  const handleManualSync = async () => {
-    setIsSyncing(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSyncStatus(locale === "mr" ? "आत्ताच क्लाउड सिंक झाले ✓" : "Cloud synced just now ✓");
-    setIsSyncing(false);
-  };
-
-  const activeAction = actions.find((a) => !a.completed) || actions[0];
-
-  return (
-    <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
-      <Navbar />
-      <BeneficiaryNav />
-
-      <main className="flex flex-col relative w-full pt-16 pb-28 min-h-screen">
-        <div className="flex flex-col w-full max-w-2xl mx-auto px-4 md:px-6 gap-4">
-          {/* Header & Status Card */}
-          <div className="pt-4 flex flex-col gap-1">
-            <div className="relative overflow-hidden rounded-2xl bg-surface-container-low shadow-sm p-4 md:p-5 border border-surface-variant/40 flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-secondary" />
-                  {locale === "mr"
-                    ? `सक्रिय टप्पा (${activeAction?.stepNum || 1} पैकी ४)`
-                    : `Active Step (${activeAction?.stepNum || 1} of 4)`}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-code-sm text-code-sm text-outline font-semibold">
-                    {pathwayLevel}
-                  </span>
-                  <TruthBadge state={truthState} />
-                </div>
+  const actions = journey?.action_plan ?? [];
+  const done = actions.filter(action => action.status === "completed").length;
+  const nextAction = actions.find(action => action.status !== "completed" && action.status !== "skipped");
+  const actionTitle = (action: JourneyAction) => ACTION_TITLES[action.action_type]?.[locale] ?? action.title;
+  const buttonStyle = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold text-on-primary disabled:opacity-50";
+  return <div className="min-h-screen bg-surface text-on-surface">
+    <Navbar /><BeneficiaryNav />
+    <main className="mx-auto max-w-6xl px-4 pt-24 pb-[calc(7rem+env(safe-area-inset-bottom))] md:px-6">
+      <div className="mb-7 flex items-center justify-between gap-4"><p className="font-semibold text-secondary">{copy.journey}</p><TruthBadge state={truthState} /></div>
+      <h1 className="mb-6 text-3xl md:text-5xl font-bold text-primary">{copy.title}</h1>
+      {loading ? <p role="status" className="flex gap-3"><Loader2 className="animate-spin" />{copy.loading}</p>
+        : status !== "authenticated" ? <section className="rounded-2xl bg-surface-container p-6"><p className="mb-4">{copy.signIn}</p><Link className={buttonStyle} href="/login?next=/journey">{copy.login}</Link></section>
+        : loadError ? <section role="alert" className="rounded-2xl bg-error-container p-6"><p className="mb-4">{copy.error}</p><button className={buttonStyle} onClick={load}>{copy.retry}</button></section>
+        : !journey?.active_pathway ? <section className="rounded-2xl bg-surface-container p-6"><p className="mb-4">{copy.empty}</p><Link className={buttonStyle} href="/pathways">{copy.choose}<ArrowRight size={18} /></Link></section>
+        : <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+          <section className="rounded-3xl bg-surface-container-lowest p-6 shadow-sm md:p-8">
+            <p className="text-sm text-on-surface-variant">{journey.active_pathway.title}</p>
+            <h2 className="my-5 text-2xl font-bold text-primary">{nextAction ? actionTitle(nextAction) : actions.length ? copy.allDone : copy.noActions}</h2>
+            {nextAction && <ReadAloudButton text={actionTitle(nextAction)} label={locale === "mr" ? "ऐका" : locale === "hi" ? "सुनें" : "Listen"} />}
+            {saveError && <p role="alert" className="my-4 rounded-xl bg-error-container p-4 text-on-error-container">{copy.saveError}</p>}
+            <div className="my-6 flex flex-col gap-3">
+              {nextAction ? <button id="markCompleteBtn" className={buttonStyle} disabled={!!updatingId} onClick={() => mark(nextAction)}>
+                {updatingId ? <Loader2 size={20} className="animate-spin" /> : <Check size={20} />}{copy.complete}
+              </button> : <p>{copy.next}</p>}
+              <Link href="/help" className="min-h-11 rounded-xl border border-outline-variant px-5 py-3 text-center font-semibold">{copy.help}</Link>
+            </div>
+            <p className="text-sm leading-relaxed text-on-surface-variant">{copy.notApproval}</p>
+          </section>
+          <section className="rounded-3xl border border-outline-variant/40 p-6">
+            <h2 className="font-semibold">{done} / {actions.length} {copy.progress}</h2>
+            <progress aria-label={copy.progress} value={done} max={Math.max(1, actions.length)} className="my-4 h-3 w-full accent-primary" />
+            <ol className="space-y-4">{actions.map((action, index) => <li key={action.id} className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-on-primary">{action.status === "completed" ? <Check size={18} /> : index + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{actionTitle(action)}</p>
+                <p className="text-sm text-on-surface-variant">{action.status === "completed" ? copy.done : copy.upcoming}</p>
+                {action.status === "completed" && <button disabled={!!updatingId} onClick={() => mark(action)} className="min-h-11 text-sm underline">{copy.reopen}</button>}
               </div>
-
-              <div className="flex flex-col mt-1">
-                <h1 className="font-headline-sm text-headline-sm text-primary tracking-tight font-bold">
-                  {locale === "mr" ? "उपजीविका प्रगती (My Journey)" : "Livelihood Journey Progress"}
-                </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase font-semibold">
-                    {locale === "mr" ? "निवडलेला मार्ग:" : "Enrolled Path:"}
-                  </span>
-                  <h2 className="font-title-md text-title-md text-on-surface font-bold">
-                    {pathwayTitle}
-                  </h2>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="flex items-center gap-3 pt-2">
-                <div className="flex-1 h-2.5 rounded-full bg-surface-container-highest overflow-hidden">
-                  <div
-                    className="h-full bg-secondary-container rounded-full transition-all duration-500"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-                <span className="font-label-sm text-label-sm text-secondary font-bold shrink-0">
-                  {progressPct}% {locale === "mr" ? "पूर्ण" : "Completed"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Mutation Error Alert */}
-          {mutationError && (
-            <div className="p-3 rounded-xl bg-error-container/40 border border-error/20 flex items-center gap-2 text-error font-body-sm text-body-sm">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{mutationError}</span>
-            </div>
-          )}
-
-          {/* Priority Next Action Card */}
-          <div className="relative rounded-2xl bg-surface-container-lowest shadow-md border border-surface-variant/40 overflow-hidden p-4 md:p-5 flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed shrink-0">
-                  <Clock className="w-5 h-5 text-secondary" />
-                </div>
-                <div>
-                  <span className="inline-block font-label-sm text-label-sm uppercase tracking-wide text-secondary font-bold">
-                    {locale === "mr" ? "तात्काळ कृती (Priority Action)" : "Immediate Action Required"}
-                  </span>
-                  <p className="font-code-sm text-code-sm text-secondary font-semibold flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-secondary" />
-                    {activeAction?.due_text}
-                  </p>
-                </div>
-              </div>
-              <ReadAloudButton
-                text={`${activeAction?.title}. ${activeAction?.desc}`}
-                label={locale === "mr" ? "ऐका" : "Listen"}
-                size="sm"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">
-                {locale === "mr"
-                  ? `तुमची पुढील कृती: ${activeAction?.title}`
-                  : `Next Step: ${activeAction?.title}`}
-              </h2>
-              <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-                {activeAction?.desc}
-              </p>
-            </div>
-
-            {/* Checklist Section */}
-            <div className="rounded-xl bg-surface-container-low p-3 md:p-4 flex flex-col gap-2 border border-surface-variant/20">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-secondary" />
-                <span className="font-label-md text-label-md text-on-surface font-bold">
-                  {locale === "mr" ? "कागदपत्रे तपासणी यादी:" : "Required Document Checklist:"}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-2 pt-1">
-                {checklist.map((item) => (
-                  <label
-                    key={item.id}
-                    onClick={() => handleToggleChecklist(item.id)}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-container-lowest shadow-sm cursor-pointer border border-surface-variant/20 hover:bg-surface-bright transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.checked}
-                      onChange={() => {}}
-                      className="w-5 h-5 rounded accent-primary cursor-pointer"
-                    />
-                    <span
-                      className={`font-body-sm text-body-sm ${
-                        item.checked ? "text-on-surface line-through opacity-70" : "text-on-surface font-medium"
-                      }`}
-                    >
-                      {item.text}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                id="markCompleteBtn"
-                disabled={updatingActionId === activeAction?.id}
-                onClick={() => handleMarkActionComplete(activeAction?.id)}
-                className="w-full min-h-[50px] px-4 py-3 rounded-xl bg-primary text-on-primary font-title-md text-title-md font-bold flex items-center justify-center gap-2 shadow-sm active:bg-primary-container active:scale-[0.99] transition-all disabled:opacity-50"
-              >
-                {updatingActionId === activeAction?.id ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>{locale === "mr" ? "नोंदवत आहे..." : "Updating..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>
-                      {activeAction?.completed
-                        ? locale === "mr" ? "पुन्हा प्रलंबित करा" : "Re-open Action"
-                        : locale === "mr" ? "झाले म्हणून नोंदवा (Mark as Completed)" : "Mark as Completed"}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              <Link
-                href="/help"
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-surface-container text-primary font-label-md text-label-md font-bold flex items-center justify-center gap-2 active:bg-surface-container-high transition-colors"
-              >
-                <PhoneCall className="w-4 h-4 text-secondary" />
-                <span>{locale === "mr" ? "समन्वयकाशी बोला (Call Field Worker)" : "Request Worker Assistance"}</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Device Ledger / Offline Sync Card */}
-          <div className="rounded-2xl bg-surface-container-high p-4 md:p-5 shadow-sm border border-surface-variant/40 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary-container opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-secondary" />
-                </span>
-                <span className="font-label-md text-label-md text-primary font-bold">
-                  {locale === "mr" ? "डिव्हाइस लेजर: सुरक्षित" : "Local Ledger: Active"}
-                </span>
-              </div>
-              <span className="font-code-sm text-code-sm text-on-surface-variant bg-surface-container-lowest px-2 py-0.5 rounded-full font-semibold">
-                IndexedDB Safe
-              </span>
-            </div>
-
-            <p className="font-body-sm text-body-sm text-on-surface-variant">
-              {locale === "mr"
-                ? "ऑफलाइन असतानाही तुमची कृती स्थानिक मेमरीमध्ये सेव्ह राहते आणि इंटरनेट उपलब्ध होताच सुरक्षित सिंक होते."
-                : "Your progress is securely backed up locally. Mutations queue when offline and sync upon reconnection."}
-            </p>
-
-            <div className="pt-2 flex items-center justify-between border-t border-surface-variant/30">
-              <div className="flex items-center gap-1.5 text-on-surface-variant font-body-sm text-body-sm">
-                <CloudCheck className="w-4 h-4 text-secondary" />
-                <span className="font-label-sm text-label-sm">{syncStatus}</span>
-              </div>
-              <button
-                type="button"
-                id="syncTriggerBtn"
-                onClick={handleManualSync}
-                className="min-h-[44px] px-3 py-1.5 rounded-xl bg-surface-container-lowest text-primary font-label-sm text-label-sm font-bold flex items-center gap-1.5 shadow-sm active:bg-surface-container transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 text-secondary ${isSyncing ? "animate-spin" : ""}`} />
-                <span>{locale === "mr" ? "क्लाउड सिंक तपासा" : "Check Cloud Sync"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Action Sequence / Timeline */}
-          <div className="rounded-2xl bg-surface-container-lowest shadow-sm border border-surface-variant/40 p-4 md:p-5 flex flex-col gap-3">
-            <div className="flex items-center justify-between pb-1 border-b border-surface-variant/20">
-              <span className="font-label-md text-label-md text-on-surface font-bold uppercase tracking-wider">
-                {locale === "mr" ? "प्रगती टप्पे (Action Sequence)" : "Action Sequence"}
-              </span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant font-medium">
-                {locale === "mr" ? `${activeAction?.stepNum || 1} पैकी ४ चालू` : `Step ${activeAction?.stepNum || 1} of 4 Active`}
-              </span>
-            </div>
-
-            <div className="relative flex flex-col gap-3 pt-1">
-              <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-surface-container-highest" />
-
-              {actions.map((act) => {
-                const isCurrent = act.id === activeAction?.id;
-                const isDone = act.completed;
-
-                return (
-                  <div key={act.id} className="relative flex items-start gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 shadow-sm font-bold text-label-sm ${
-                        isDone
-                          ? "bg-secondary text-on-secondary"
-                          : isCurrent
-                          ? "bg-primary text-on-primary ring-4 ring-secondary-fixed/50"
-                          : "bg-surface-container-highest text-on-surface-variant"
-                      }`}
-                    >
-                      {isDone ? <Check className="w-4 h-4" /> : act.stepNum}
-                    </div>
-
-                    <div
-                      className={`flex-1 rounded-xl p-3 border transition-colors ${
-                        isCurrent
-                          ? "bg-surface-container-low border-secondary/30 shadow-sm"
-                          : "bg-surface-container-lowest border-surface-variant/20"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`font-title-md text-title-md font-bold ${
-                            isDone ? "text-outline line-through" : isCurrent ? "text-primary" : "text-on-surface"
-                          }`}
-                        >
-                          {act.title}
-                        </span>
-                        <span
-                          className={`font-label-sm text-label-sm px-2 py-0.5 rounded-full font-semibold ${
-                            isDone
-                              ? "bg-secondary-fixed/50 text-secondary"
-                              : isCurrent
-                              ? "bg-secondary-fixed text-on-secondary-fixed"
-                              : "bg-surface-container text-outline"
-                          }`}
-                        >
-                          {isDone
-                            ? locale === "mr" ? "पूर्ण" : "Done"
-                            : isCurrent
-                            ? locale === "mr" ? "चालू" : "Active"
-                            : locale === "mr" ? "पुढील" : "Upcoming"}
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
-                        {act.title_en}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+            </li>)}</ol>
+          </section>
+        </div>}
+      {status === "authenticated" && <section className="mt-6 flex flex-col gap-3 rounded-2xl bg-surface-container p-5 md:flex-row md:items-center md:justify-between">
+        <div><p className="text-sm">{copy.offline}</p>{loadedAt && <p className="mt-1 text-sm text-on-surface-variant">{copy.saved} · {loadedAt.toLocaleTimeString(locale + "-IN")}</p>}</div>
+        <button id="syncTriggerBtn" disabled={loading || !!updatingId} onClick={load} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-surface px-4 py-3 font-semibold"><RefreshCw size={18} />{copy.refresh}</button>
+      </section>}
+    </main>
+  </div>;
 }

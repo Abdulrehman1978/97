@@ -75,64 +75,97 @@ function EmployerWorkspace({ isLive }: { isLive: boolean }) {
     truth_state: "LIVE"
   });
 
+  const [apiError, setApiError] = useState<string | null>(null);
+
   const loadData = async () => {
+    setLoading(true);
+    setApiError(null);
     try {
-      setLoading(true);
       const [jList, cList, aList] = await Promise.all([
-        getEmployerJobs("MH-NAG").catch(() => []),
-        getEmployerCandidates(searchSkill, "MH-NAG").catch(() => []),
-        getApplications().catch(() => [])
+        getEmployerJobs("MH-NAG"),
+        getEmployerCandidates(searchSkill, "MH-NAG"),
+        getApplications()
       ]);
 
-      const seedJobs = [
-        {
-          id: "job-1",
-          title: "Two-Wheeler Service & Maintenance Mechanic",
-          vacancies: 3,
-          monthly_wage_inr: 17500,
-          worksite_address: "Mahindra First Choice Service Center, Hingna",
-          status: "Active Hiring",
-          truth_state: "LIVE"
-        },
-        {
-          id: "job-2",
-          title: "EV Scooter Battery Assembly Technician",
-          vacancies: 5,
-          monthly_wage_inr: 19500,
-          worksite_address: "GreenWheels Assembly Plant, Butibori",
-          status: "Interviewing",
-          truth_state: "LIVE"
-        }
-      ];
+      const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+      if (jList && jList.length > 0) {
+        setJobs(jList);
+      } else if (isDemo) {
+        setJobs([
+          {
+            id: "job-1",
+            title: "Two-Wheeler Service & Maintenance Mechanic",
+            vacancies: 3,
+            monthly_wage_inr: 17500,
+            worksite_address: "Mahindra First Choice Service Center, Hingna",
+            status: "Active Hiring",
+            truth_state: "DEMO_DATA"
+          },
+          {
+            id: "job-2",
+            title: "EV Scooter Battery Assembly Technician",
+            vacancies: 5,
+            monthly_wage_inr: 19500,
+            worksite_address: "GreenWheels Assembly Plant, Butibori",
+            status: "Interviewing",
+            truth_state: "DEMO_DATA"
+          }
+        ]);
+      } else {
+        setJobs([]);
+      }
 
-      const seedCandidates = [
-        {
-          id: "cand-1",
-          candidate_alias: "Candidate #MH-988",
-          primary_trade: "Two-Wheeler Diagnostics & Overhaul",
-          experience_months: 36,
-          competencies: ["Engine Overhaul", "Brake Shoe Maintenance", "Pneumatic Tools"],
-          skill_gap: "Needs 30h EV module",
-          match_percentage: 94,
-          distance_km: 11.2,
-          is_accessible_match: true
-        },
-        {
-          id: "cand-2",
-          candidate_alias: "Candidate #MH-912",
-          primary_trade: "Automotive Electrical Wiring",
-          experience_months: 24,
-          competencies: ["Wiring Harness", "Battery Health Diagnostic", "Multimeter"],
-          skill_gap: "Mechanical engine overhaul novice",
-          match_percentage: 88,
-          distance_km: 8.5,
-          is_accessible_match: true
-        }
-      ];
+      if (cList && cList.length > 0) {
+        setCandidates(cList);
+      } else if (isDemo) {
+        setCandidates([
+          {
+            id: "cand-1",
+            candidate_alias: "Candidate #MH-988",
+            primary_trade: "Two-Wheeler Diagnostics & Overhaul",
+            experience_months: 36,
+            competencies: ["Engine Overhaul", "Brake Shoe Maintenance", "Pneumatic Tools"],
+            skill_gap: "Needs 30h EV module",
+            match_percentage: 94,
+            distance_km: 11.2,
+            is_accessible_match: true
+          },
+          {
+            id: "cand-2",
+            candidate_alias: "Candidate #MH-912",
+            primary_trade: "Automotive Electrical Wiring",
+            experience_months: 24,
+            competencies: ["Wiring Harness", "Battery Health Diagnostic", "Multimeter"],
+            skill_gap: "Mechanical engine overhaul novice",
+            match_percentage: 88,
+            distance_km: 8.5,
+            is_accessible_match: true
+          }
+        ]);
+      } else {
+        setCandidates([]);
+      }
 
-      setJobs(jList && jList.length > 0 ? jList : seedJobs);
-      setCandidates(cList && cList.length > 0 ? cList : seedCandidates);
       setApplications(aList || []);
+    } catch (err: any) {
+      console.warn("Failed to load employer data:", err);
+      if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+        setJobs([
+          {
+            id: "job-1",
+            title: "Two-Wheeler Service & Maintenance Mechanic",
+            vacancies: 3,
+            monthly_wage_inr: 17500,
+            worksite_address: "Mahindra First Choice Service Center, Hingna",
+            status: "Active Hiring",
+            truth_state: "DEMO_DATA"
+          }
+        ]);
+      } else {
+        setApiError(err?.message || "Failed to load requisitions from server.");
+        setJobs([]);
+        setCandidates([]);
+      }
     } finally {
       setLoading(false);
     }

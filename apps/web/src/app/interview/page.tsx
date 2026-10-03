@@ -398,7 +398,7 @@ function InterviewExperience() {
     <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar />
 
-      <main className="flex-1 w-full pt-16 pb-28 bg-surface">
+      <main className="flex-1 w-full pt-16 pb-36 bg-surface">
         <div className="max-w-xl mx-auto px-gutter-mobile py-space-sm flex flex-col gap-space-md">
           {/* ========================================================
               STATE A — INITIAL VOICE INTAKE
@@ -410,7 +410,7 @@ function InterviewExperience() {
                 <div className="flex items-center justify-between">
                   <span className="font-label-sm text-label-sm text-primary uppercase tracking-wider font-bold flex items-center gap-1">
                     <Mic className="w-4 h-4 text-secondary" />
-                    पायरी १ / ३ • STEP 1 OF 3
+                    {locale === "mr" ? "पायरी १ / ३ • कामाचा अनुभव" : locale === "hi" ? "चरण १ / ३ • कार्य अनुभव" : "Step 1 of 3 • Trade Intake"}
                   </span>
                   <span className="font-code-sm text-code-sm text-on-surface-variant font-semibold">
                     LIP-INTAKE-V3
@@ -419,11 +419,8 @@ function InterviewExperience() {
                 <div className="w-full bg-surface-container h-2 rounded-full overflow-hidden">
                   <div className="bg-secondary h-full rounded-full w-1/3 transition-all duration-300" />
                 </div>
-                <p className="font-title-md text-title-md text-on-surface mt-0.5">
-                  तुमचा कामाचा अनुभव सांगा{" "}
-                  <span className="font-body-sm text-body-sm text-on-surface-variant font-normal">
-                    (Tell your work story)
-                  </span>
+                <p className="font-title-md text-title-md text-on-surface mt-0.5 font-bold">
+                  {locale === "mr" ? "तुमचा कामाचा अनुभव सांगा" : locale === "hi" ? "अपने कार्य अनुभव के बारे में बताएं" : "Tell your work story"}
                 </p>
               </div>
 
@@ -432,19 +429,33 @@ function InterviewExperience() {
                 <div className="flex items-center gap-1.5 text-secondary">
                   <HelpCircle className="w-5 h-5 text-secondary" />
                   <span className="font-label-sm text-label-sm uppercase tracking-wide font-bold">
-                    प्रमुख प्रश्न • Daily Work Inquiry
+                    {locale === "mr" ? "प्रमुख प्रश्न" : locale === "hi" ? "प्रमुख प्रश्न" : "Core Question"}
                   </span>
                 </div>
                 <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-bold">
-                  कामाबद्दल किंवा कौशल्याबद्दल सांगा (तुम्ही रोज काय काम करता?)
+                  {locale === "mr"
+                    ? "कामाबद्दल किंवा कौशल्याबद्दल सांगा (तुम्ही रोज काय काम करता?)"
+                    : locale === "hi"
+                    ? "अपने काम या हुनर के बारे में बताएं (आप रोज क्या काम करते हैं?)"
+                    : "Tell us about your trade or daily work experience"}
                 </h1>
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  मराठी, हिंदी किंवा स्थानिक बोलीभाषेत बोला. तुम्ही वापरत असलेली अवजारे, साधने, दुरुस्ती किंवा उत्पादनाच्या कामाबद्दल मोकळेपणाने सांगा.
+                  {locale === "mr"
+                    ? "मराठी, हिंदी किंवा स्थानिक भाषेत बोला. वापरत असलेली साधने, अवजारे, दुरुस्ती किंवा उत्पादनाबद्दल मोकळेपणाने सांगा."
+                    : locale === "hi"
+                    ? "हिंदी, मराठी या स्थानीय भाषा में बोलें। प्रयुक्त औजार, उपकरण, मरम्मत या उत्पादन कार्य के बारे में बताएं।"
+                    : "Speak naturally in Marathi, Hindi, or English. Mention tools you use, repairs you make, or goods you produce."}
                 </p>
                 <div className="pt-space-xs">
                   <ReadAloudButton
-                    text="तुम्ही रोज काय काम करता? साध्या भाषेत सांगा. मराठी किंवा हिंदीत बोला. तुम्ही वापरत असलेली अवजारे आणि दुरुस्तीच्या कामाबद्दल सांगा."
-                    label="मार्गदर्शन ऐका (Listen to Instructions)"
+                    text={
+                      locale === "mr"
+                        ? "तुम्ही रोज काय काम करता? साध्या भाषेत सांगा. मराठी किंवा हिंदीत बोला. तुम्ही वापरत असलेली अवजारे आणि दुरुस्तीच्या कामाबद्दल सांगा."
+                        : locale === "hi"
+                        ? "आप रोज क्या काम करते हैं? सरल भाषा में बताएं। प्रयुक्त औजारों और मरम्मत कार्यों का उल्लेख करें।"
+                        : "Describe what you do every day. Mention tools you use and repairs you carry out."
+                    }
+                    label={locale === "mr" ? "मार्गदर्शन ऐका" : locale === "hi" ? "मार्गदर्शन सुनें" : "Listen"}
                   />
                 </div>
               </div>
@@ -517,7 +528,7 @@ function InterviewExperience() {
                     <div className="flex items-center justify-between text-secondary mb-1">
                       <span className="font-label-sm text-label-sm font-bold flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-secondary" />
-                        नोंदवलेले शब्द (Captured Narrative):
+                        {locale === "mr" ? "नोंदवलेले शब्द:" : locale === "hi" ? "दर्ज किए गए शब्द:" : "Captured Narrative:"}
                       </span>
                       {isRecording && (
                         <span className="font-code-sm text-code-sm text-on-surface-variant">
@@ -541,8 +552,8 @@ function InterviewExperience() {
                     <Keyboard className="w-5 h-5 text-secondary" />
                     <span>
                       {showTypeDrawer
-                        ? "टाईप खिडकी बंद करा (Close Text Drawer)"
-                        : "किंवा टाईप करून सांगा (Type Instead)"}
+                        ? locale === "mr" ? "टाईप खिडकी बंद करा" : locale === "hi" ? "टेक्स्ट इनपुट बंद करें" : "Close Text Input"
+                        : locale === "mr" ? "किंवा टाईप करून सांगा" : locale === "hi" ? "या टाइप करके बताएं" : "Type Instead"}
                     </span>
                   </button>
                 </div>
@@ -551,13 +562,19 @@ function InterviewExperience() {
                 {showTypeDrawer && (
                   <div className="w-full flex flex-col gap-2 pt-space-xs text-left animate-in fade-in">
                     <label htmlFor="manual-work-story" className="font-label-sm text-label-sm text-on-surface-variant font-bold">
-                      तुमच्या कामाचा तपशील लिहा:
+                      {locale === "mr" ? "तुमच्या कामाचा तपशील लिहा:" : locale === "hi" ? "अपने काम का विवरण लिखें:" : "Write details of your daily work:"}
                     </label>
                     <textarea
                       id="manual-work-story"
                       value={typedInput}
                       onChange={(e) => setTypedInput(e.target.value)}
-                      placeholder="उदा. मी शेती अवजारे आणि ट्रॅक्टर दुरुस्ती करतो..."
+                      placeholder={
+                        locale === "mr"
+                          ? "उदा. मी शेती अवजारे आणि ट्रॅक्टर दुरुस्ती करतो..."
+                          : locale === "hi"
+                          ? "उदा. मैं दोपहिया वाहन और ट्रैक्टर की मरम्मत करता हूँ..."
+                          : "e.g. I repair two-wheelers, change engine oil and brake pads..."
+                      }
                       rows={3}
                       className="w-full p-space-sm bg-surface-container-low rounded-lg font-body-md text-body-md text-on-surface border border-outline-variant/40 focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary"
                     />
@@ -567,20 +584,20 @@ function InterviewExperience() {
                         type="button"
                         className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface font-label-sm text-label-sm min-h-[44px]"
                       >
-                        रद्द करा
+                        {locale === "mr" ? "रद्द करा" : locale === "hi" ? "रद्द करें" : "Cancel"}
                       </button>
                       <button
                         onClick={() => {
                           if (typedInput.trim()) {
                             setTranscript(typedInput.trim());
                             setShowTypeDrawer(false);
-                            showToast("मजकूर नोंदवला (Text Captured)");
+                            showToast(locale === "mr" ? "मजकूर जोडला" : locale === "hi" ? "टेक्स्ट जोड़ा गया" : "Text added");
                           }
                         }}
                         type="button"
                         className="px-4 py-1.5 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-bold min-h-[44px]"
                       >
-                        मजकूर जोडा
+                        {locale === "mr" ? "मजकूर जोडा" : locale === "hi" ? "टेक्स्ट जोड़ें" : "Save Text"}
                       </button>
                     </div>
                   </div>
@@ -594,7 +611,7 @@ function InterviewExperience() {
                     type="button"
                     className="w-full min-h-[50px] rounded-xl bg-primary text-on-primary font-title-md text-title-md font-bold shadow-md flex items-center justify-center gap-2 hover:bg-primary-container active:scale-[0.99] transition-all"
                   >
-                    <span>शब्दांची तपासणी करा (Review Words)</span>
+                    <span>{locale === "mr" ? "शब्दांची तपासणी करा" : locale === "hi" ? "शब्दों की समीक्षा करें" : "Review Spoken Words"}</span>
                     <ArrowRight className="w-5 h-5" />
                   </button>
 
@@ -611,7 +628,7 @@ function InterviewExperience() {
                     className="w-full min-h-[46px] rounded-xl bg-surface-container text-primary font-title-md text-title-md font-bold flex items-center justify-center gap-2 hover:bg-surface-container-high transition-colors"
                   >
                     <Sparkles className="w-4 h-4 text-secondary" />
-                    <span>कौशल्य शोधा (Analyze My Skills)</span>
+                    <span>{locale === "mr" ? "कौशल्य शोधा" : locale === "hi" ? "कौशल खोजें" : "Analyze My Skills"}</span>
                   </button>
                 </div>
               </div>
@@ -721,11 +738,13 @@ function InterviewExperience() {
                     <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm">
                       2
                     </span>
-                    <span className="font-label-md text-label-md text-on-surface-variant">Step 2 of 3</span>
+                    <span className="font-label-md text-label-md text-on-surface-variant">
+                      {locale === "mr" ? "पायरी २ / ३" : locale === "hi" ? "चरण २ / ३" : "Step 2 of 3"}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm font-semibold">
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
-                    <span>स्थानिक मसुदा • Local Draft</span>
+                    <span>{locale === "mr" ? "स्थानिक मसुदा" : locale === "hi" ? "स्थानीय ड्राफ्ट" : "Local Draft"}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -733,24 +752,43 @@ function InterviewExperience() {
                     <div className="h-full bg-secondary rounded-full w-2/3" />
                   </div>
                   <span className="font-title-md text-title-md text-primary truncate font-bold">
-                    बोललेले शब्द तपासा
+                    {locale === "mr" ? "बोललेले शब्द तपासा" : locale === "hi" ? "शब्दों की समीक्षा करें" : "Review Spoken Words"}
                   </span>
                 </div>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Review your words before skill extraction begins.
+                  {locale === "mr"
+                    ? "कौशल्य काढण्यापूर्वी तुमचे बोललेले शब्द तपासा."
+                    : locale === "hi"
+                    ? "कौशल विश्लेषण से पहले अपने शब्द जांचें।"
+                    : "Review your words before skill extraction begins."}
                 </p>
               </div>
 
-              {/* Reassurance Micro-Banner */}
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-container text-on-surface border border-outline-variant/20">
-                <ShieldCheck className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                <div className="flex flex-col">
-                  <span className="font-label-md text-label-md text-primary font-bold">
-                    सोपे आणि पारदर्शक (Easy &amp; Accurate)
+              {/* Highlighted Trade Evidence Tokens Box */}
+              <div className="flex flex-col gap-2 p-3 bg-surface-container-low rounded-xl border border-surface-variant/30">
+                <div className="flex items-center gap-1.5 text-secondary">
+                  <Sparkles className="w-4 h-4 text-secondary" />
+                  <span className="font-label-sm text-label-sm font-bold uppercase tracking-wider">
+                    {locale === "mr"
+                      ? "ओळखलेले कामाचे संदर्भ (Trade Evidence Spans)"
+                      : locale === "hi"
+                      ? "पहचाने गए कार्य संदर्भ"
+                      : "Highlighted Trade Evidence"}
                   </span>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    काही शब्द चुकीचे ऐकले गेले असल्यास तुम्ही ते सहज दुरुस्त करू शकता.
-                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(tasksDetected.length > 0
+                    ? tasksDetected
+                    : ["इंजिन दुरुस्ती / Engine", "ब्रेक काम / Brakes", "ऑइल बदल / Oil Service", "वर्कशॉप साधने / Tools"]
+                  ).map((item: string, idx: number) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-full bg-surface-container-lowest text-primary text-xs font-semibold border border-outline-variant/30 flex items-center gap-1.5 shadow-xs"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
+                      {item}
+                    </span>
+                  ))}
                 </div>
               </div>
 
@@ -761,10 +799,10 @@ function InterviewExperience() {
                     <Volume2 className="w-5 h-5 text-secondary" />
                     <div className="flex flex-col">
                       <span className="font-label-md text-label-md text-on-surface font-bold">
-                        ध्वनीमुद्रित संभाषण
+                        {locale === "mr" ? "ध्वनीमुद्रित संभाषण" : locale === "hi" ? "रिकॉर्ड किया गया संवाद" : "Recorded Audio"}
                       </span>
                       <span className="font-label-sm text-label-sm text-on-surface-variant">
-                        Recorded Audio • 0:18s
+                        0:18s
                       </span>
                     </div>
                   </div>
@@ -807,7 +845,7 @@ function InterviewExperience() {
                   <div className="flex items-center gap-1.5">
                     <Mic className="w-5 h-5 text-primary" />
                     <span className="font-title-md text-title-md text-primary font-bold">
-                      तुमचे शब्द (Your Words)
+                      {locale === "mr" ? "तुमचे शब्द" : locale === "hi" ? "आपके शब्द" : "Your Words"}
                     </span>
                   </div>
                   <button
@@ -816,7 +854,7 @@ function InterviewExperience() {
                     className="min-h-[44px] px-3 py-1.5 rounded-lg bg-surface-container text-primary font-label-md text-label-md flex items-center gap-1 active:bg-surface-container-high transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
-                    <span>{isEditingTranscript ? "पूर्ण झाले" : "संपादित करा"}</span>
+                    <span>{isEditingTranscript ? (locale === "mr" ? "पूर्ण झाले" : "Done") : (locale === "mr" ? "संपादित करा" : "Edit")}</span>
                   </button>
                 </div>
 
@@ -831,10 +869,10 @@ function InterviewExperience() {
                   />
                   <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20">
                     <span className="font-label-sm text-label-sm text-on-surface-variant">
-                      Marathi • Ephemeral Acoustic Session
+                      {locale === "mr" ? "मराठी • व्हॉइस सत्र" : locale === "hi" ? "हिंदी • वॉयस सत्र" : "English • Voice Session"}
                     </span>
                     <span className="font-code-sm text-code-sm text-on-surface-variant">
-                      {transcript.length} अक्षरे
+                      {transcript.length} {locale === "mr" ? "अक्षरे" : locale === "hi" ? "अक्षर" : "chars"}
                     </span>
                   </div>
                 </div>
@@ -842,7 +880,7 @@ function InterviewExperience() {
                 {savedAlertVisible && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md">
                     <CheckCircle2 className="w-4 h-4 text-on-tertiary-container" />
-                    <span>बदल सेव्ह केले! (Changes saved)</span>
+                    <span>{locale === "mr" ? "बदल सेव्ह झाले!" : locale === "hi" ? "परिवर्तन सहेजे गए!" : "Changes saved!"}</span>
                   </div>
                 )}
 
@@ -856,19 +894,19 @@ function InterviewExperience() {
                     className="min-h-[44px] px-2 py-2 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md flex items-center justify-center gap-1.5 active:bg-surface-container-high transition-colors"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    <span>पुन्हा बोला (Retry)</span>
+                    <span>{locale === "mr" ? "पुन्हा बोला" : locale === "hi" ? "पुनः बोलें" : "Retry"}</span>
                   </button>
                   <button
                     onClick={() => {
                       setSavedAlertVisible(true);
                       setTimeout(() => setSavedAlertVisible(false), 2500);
-                      showToast("बदल सेव्ह झाले.");
+                      showToast(locale === "mr" ? "बदल सेव्ह झाले." : locale === "hi" ? "परिवर्तन सहेजे गए." : "Changes saved.");
                     }}
                     type="button"
                     className="min-h-[44px] px-2 py-2 rounded-lg bg-surface-container-highest text-primary font-label-md text-label-md flex items-center justify-center gap-1.5 active:bg-surface-variant transition-colors font-bold"
                   >
                     <Check className="w-4 h-4" />
-                    <span>बदल सेव्ह करा</span>
+                    <span>{locale === "mr" ? "बदल सेव्ह करा" : locale === "hi" ? "परिवर्तन सहेजें" : "Save Changes"}</span>
                   </button>
                 </div>
               </div>
@@ -889,14 +927,13 @@ function InterviewExperience() {
                       <Sparkles className="w-5 h-5 text-secondary-fixed" />
                     )}
                     <span>
-                      {extracting ? "कौशल्यांचे विश्लेषण सुरू आहे…" : "कौशल्ये शोधा व पुढे जा"}
+                      {extracting
+                        ? locale === "mr" ? "कौशल्यांचे विश्लेषण सुरू आहे…" : locale === "hi" ? "कौशल विश्लेषण जारी है..." : "Analyzing skills..."
+                        : locale === "mr" ? "कौशल्ये शोधा व पुढे जा" : locale === "hi" ? "कौशल खोजें और आगे बढ़ें" : "Analyze My Skills & Continue"}
                     </span>
                   </div>
                   <ArrowRight className="w-5 h-5 text-primary-fixed-dim" />
                 </button>
-                <p className="text-center font-label-sm text-label-sm text-on-surface-variant">
-                  Analyze My Skills &amp; Continue → (National Skills Qualification Matrix)
-                </p>
               </div>
             </div>
           )}

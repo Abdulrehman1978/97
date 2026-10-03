@@ -53,9 +53,10 @@ export default function JudgeDemoPage() {
     mechanic: {
       name: "Ramesh Mesram (रमेश मेश्राम)",
       trade: "Two-Wheeler Service & Repair (दुचाकी मेकॅनिक)",
+      image: "/images/occupations/mechanic.webp",
       edu: "Class 10 (१०वी)",
       experience: "36 Months Informal Roadside Garage",
-      constraints: "15 km travel max • Wants stable wage first",
+      constraints: "15 km travel max • Prefers wage employment first",
       voice_input: "मी तीन वर्षे दुचाकी गॅरेजमध्ये काम केले आहे. इंजिन उघडणे, ब्रेक बदलणे आणि ऑइल बदलणे येते. वायरिंगमध्ये थोडी मदत लागते.",
       evidence_phrase: "“मी गॅरेजमध्ये इंजिन उघडणे आणि ब्रेक दुरुस्त करतो”",
       extracted_skills: [
@@ -63,13 +64,14 @@ export default function JudgeDemoPage() {
         { name: "Brake System Maintenance", fit: "95%", nsqf: "ASC/Q1402 (L4)" },
         { name: "Workshop Safety", fit: "78%", nsqf: "ASC/Q1401 (L3)" }
       ],
-      rpl_verdict: "RPL Tier 1 Fast Track (30h Bridge Module replaces 450h standard course)",
+      rpl_verdict: "Potential RPL Tier 1 Fast Track (Reference 30h Bridge Module, Subject to Assessment)",
       recommendation: "Automotive Service Technician (Wage) @ Hingna MIDC",
       district_signal: "Nagpur Automotive Shortage: -180 Technicians Net Deficit"
     },
     tailor: {
       name: "Sunita Kamble (सुनीता कांबळे)",
       trade: "Garment Stitching & Alteration (महिला शिवणकला कारागीर)",
+      image: "/images/occupations/tailor.webp",
       edu: "Class 8 (८वी)",
       experience: "48 Months Home-based Tailoring",
       constraints: "5 km travel max (Caregiving duties) • Self-Employment",
@@ -80,13 +82,14 @@ export default function JudgeDemoPage() {
         { name: "Hemming & Overlock Finishing", fit: "90%", nsqf: "AMH/Q1947 (L3)" },
         { name: "Client Measurement Protocol", fit: "85%", nsqf: "AMH/Q1947 (L3)" }
       ],
-      rpl_verdict: "PM-AJAY GIA Tool Kit Asset Grant (₹50,000 Equipment Assistance)",
+      rpl_verdict: "Potential PM-AJAY GIA Tool Kit Assistance (Pre-screening Assessment)",
       recommendation: "Independent Women's Micro-Tailoring Unit",
       district_signal: "Ward Micro-Credit Deployment Slot Available"
     },
     disabled: {
       name: "Vijay Gaikwad (विजय गायकवाड)",
       trade: "Electronic Assembly / Solar Support (दिव्यांग उमेदवार)",
+      image: "/images/occupations/solar.webp",
       edu: "Class 12 (१२वी)",
       experience: "12 Months Basic PCB Soldering & Electricals",
       constraints: "Requires Wheelchair Ramp & Accessible Transport",
@@ -96,7 +99,7 @@ export default function JudgeDemoPage() {
         { name: "Solar Inverter Assembly", fit: "88%", nsqf: "SGJ/Q0101 (L4)" },
         { name: "Multimeter Diagnostic Testing", fit: "91%", nsqf: "ELE/Q3101 (L3)" }
       ],
-      rpl_verdict: "Suryamitra Certified Solar PV Installer (Accessible Center Matched)",
+      rpl_verdict: "Matched Accessible Training Center (Pre-screening Result)",
       recommendation: "Green Jobs Academy, Butibori (Verified Ramp Center)",
       district_signal: "Accessible Industry Hiring Quota Active"
     }
@@ -261,6 +264,35 @@ export default function JudgeDemoPage() {
               </div>
             </div>
 
+            {/* Persona Visual Profile Card */}
+            <div className="bg-surface-container-lowest rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col md:flex-row items-center gap-5">
+              <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-2xl overflow-hidden shadow-sm shrink-0 border border-surface-variant/40">
+                <img
+                  src={currentPersona.image}
+                  alt={currentPersona.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                  <h2 className="font-headline-sm text-headline-sm text-primary font-bold">
+                    {currentPersona.name}
+                  </h2>
+                  <TruthBadge state="DEMO_DATA" compact />
+                </div>
+                <p className="font-title-md text-title-md text-secondary font-semibold mt-0.5">
+                  {currentPersona.trade}
+                </p>
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-2 text-label-sm font-label-sm text-on-surface-variant">
+                  <span>शिक्षण: {currentPersona.edu}</span>
+                  <span>•</span>
+                  <span>अनुभव: {currentPersona.experience}</span>
+                  <span>•</span>
+                  <span>मर्यादा: {currentPersona.constraints}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Narrative 8-Step Visual Pipeline */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Step 1: Voice & Story */}
@@ -289,7 +321,7 @@ export default function JudgeDemoPage() {
                 </div>
                 <div className="mt-auto pt-2 border-t border-surface-variant/20">
                   <span className="font-code-sm text-code-sm text-secondary font-bold">
-                    100% Traceable to spoken audio
+                    Traceable to Spoken Evidence
                   </span>
                 </div>
               </div>
@@ -317,14 +349,14 @@ export default function JudgeDemoPage() {
               <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-variant/40 shadow-sm flex flex-col gap-2">
                 <span className="font-label-sm text-label-sm text-secondary font-bold uppercase tracking-wider flex items-center gap-1">
                   <Award className="w-3.5 h-3.5" />
-                  टप्पा ४: RPL व अनुदान पात्रता
+                  टप्पा ४: RPL व अनुदान पूर्व-तपासणी
                 </span>
                 <p className="font-body-sm text-body-sm text-on-surface font-medium leading-relaxed">
                   {currentPersona.rpl_verdict}
                 </p>
                 <div className="mt-auto pt-2 border-t border-surface-variant/20">
                   <span className="font-code-sm text-code-sm text-on-tertiary-container font-bold">
-                    Fast-Track Bridge Approved
+                    Reference Bridge Qualification
                   </span>
                 </div>
               </div>
@@ -354,7 +386,7 @@ export default function JudgeDemoPage() {
                 </p>
                 <div className="mt-auto pt-2 border-t border-surface-variant/20">
                   <span className="font-code-sm text-code-sm text-secondary font-semibold">
-                    PM-AJAY Full Subsidy Active
+                    Pre-Screening Pathway Match
                   </span>
                 </div>
               </div>

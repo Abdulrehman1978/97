@@ -131,71 +131,102 @@ export default function HelpPage() {
       <Navbar />
       <BeneficiaryNav />
 
-      <main className="flex flex-col relative w-full pt-16 pb-28 min-h-screen">
-        <div className="flex flex-col w-full max-w-2xl mx-auto px-4 md:px-6 gap-4">
+      <main className="flex flex-col relative w-full pt-16 pb-36 min-h-screen">
+        <div className="flex flex-col w-full max-w-2xl mx-auto px-4 md:px-6 gap-5">
           {/* Header */}
           <div className="pt-4 flex flex-col gap-1">
-            <div className="flex items-center justify-between text-label-sm font-label-sm uppercase tracking-wider text-outline">
-              <span>{locale === "mr" ? "टप्पा ५ / ५ • मदत व तक्रार निवारण" : "Step 5 of 5 • Help & Grievance Redressal"}</span>
-              <TruthBadge state="LIVE" />
+            <div className="text-label-sm font-label-sm uppercase tracking-wider text-outline font-semibold">
+              {locale === "mr" ? "मदत व तक्रार निवारण कक्ष" : locale === "hi" ? "सहायता एवं शिकायत निवारण" : "Support & Grievance Desk"}
             </div>
 
             <h1 className="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-primary tracking-tight font-bold mt-1">
-              {locale === "mr" ? "मदत आणि तक्रार निवारण केंद्र (Help & Grievance Redressal)" : "Help & Grievance Redressal Desk"}
+              {locale === "mr" ? "मदत आणि तक्रार निवारण केंद्र" : locale === "hi" ? "सहायता एवं शिकायत निवारण केंद्र" : "Help & Grievance Redressal Desk"}
             </h1>
 
             <p className="font-body-sm text-body-sm text-on-surface-variant font-medium">
               {locale === "mr"
                 ? "समन्वयक संपर्क, कॉलबॅक विनंती किंवा शासकीय योजनेबद्दल तक्रार नोंदणी."
+                : locale === "hi"
+                ? "समन्वयक संपर्क, कॉलबैक अनुरोध या आधिकारिक शिकायत पंजीकरण।"
                 : "Connect with field coordinators, request a callback, or register official scheme grievances."}
             </p>
           </div>
 
-          {/* Tab Switcher */}
-          <div className="bg-surface-container-high p-1 rounded-xl flex items-center gap-1 shadow-sm">
+          {/* 3 Distinct Visual Support Choices */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setActiveTab("callback")}
-              className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
+              className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between gap-3 ${
                 activeTab === "callback"
-                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                  : "text-on-surface-variant hover:text-on-surface font-semibold"
+                  ? "bg-surface-container-lowest border-secondary shadow-md ring-2 ring-secondary/20"
+                  : "bg-surface-container-low border-surface-variant/40 hover:bg-surface-container"
               }`}
             >
-              <span className="flex items-center justify-center gap-1.5">
-                <PhoneCall className="w-4 h-4 text-secondary" />
-                {locale === "mr" ? "कॉलबॅक विनंती" : "Request Callback"}
-              </span>
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-secondary-fixed/50 flex items-center justify-center text-secondary">
+                  <PhoneCall className="w-5 h-5" />
+                </div>
+                <TruthBadge state="SANDBOX" compact />
+              </div>
+              <div>
+                <span className="font-title-md text-title-md text-primary font-bold block">
+                  {locale === "mr" ? "कॉलबॅक विनंती" : locale === "hi" ? "कॉलबैक अनुरोध" : "Request Callback"}
+                </span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant block mt-0.5">
+                  {locale === "mr" ? "२४ तासांत संपर्क" : locale === "hi" ? "२४ घंटे में संपर्क" : "Field agent call"}
+                </span>
+              </div>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("grievance")}
-              className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
+              className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between gap-3 ${
                 activeTab === "grievance"
-                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                  : "text-on-surface-variant hover:text-on-surface font-semibold"
+                  ? "bg-surface-container-lowest border-secondary shadow-md ring-2 ring-secondary/20"
+                  : "bg-surface-container-low border-surface-variant/40 hover:bg-surface-container"
               }`}
             >
-              <span className="flex items-center justify-center gap-1.5">
-                <FileText className="w-4 h-4 text-secondary" />
-                {locale === "mr" ? "तक्रार नोंदवा" : "File Grievance"}
-              </span>
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-primary-container/30 flex items-center justify-center text-primary">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <TruthBadge state="LIVE" compact />
+              </div>
+              <div>
+                <span className="font-title-md text-title-md text-primary font-bold block">
+                  {locale === "mr" ? "तक्रार नोंदवा" : locale === "hi" ? "शिकायत दर्ज करें" : "File Grievance"}
+                </span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant block mt-0.5">
+                  {locale === "mr" ? "जिल्हा समितीकडे नोंद" : locale === "hi" ? "जिला समिति को प्रेषित" : "Official DSC escalation"}
+                </span>
+              </div>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("faq")}
-              className={`flex-1 min-h-[46px] py-1.5 px-2 rounded-lg font-label-md text-label-md transition-all text-center ${
+              className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between gap-3 ${
                 activeTab === "faq"
-                  ? "bg-surface-container-lowest text-primary shadow-sm font-bold"
-                  : "text-on-surface-variant hover:text-on-surface font-semibold"
+                  ? "bg-surface-container-lowest border-secondary shadow-md ring-2 ring-secondary/20"
+                  : "bg-surface-container-low border-surface-variant/40 hover:bg-surface-container"
               }`}
             >
-              <span className="flex items-center justify-center gap-1.5">
-                <HelpCircle className="w-4 h-4 text-secondary" />
-                {locale === "mr" ? "नेहमीचे प्रश्न" : "FAQ & Guidance"}
-              </span>
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-tertiary-fixed/40 flex items-center justify-center text-on-tertiary-container">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <TruthBadge state="LIVE" compact />
+              </div>
+              <div>
+                <span className="font-title-md text-title-md text-primary font-bold block">
+                  {locale === "mr" ? "नेहमीचे प्रश्न" : locale === "hi" ? "सामान्य प्रश्न" : "Common Questions"}
+                </span>
+                <span className="font-label-sm text-label-sm text-on-surface-variant block mt-0.5">
+                  {locale === "mr" ? "त्वरित मार्गदर्शन" : locale === "hi" ? "त्वरित मार्गदर्शन" : "Instant FAQ"}
+                </span>
+              </div>
             </button>
           </div>
 

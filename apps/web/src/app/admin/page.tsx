@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { TruthBadge } from "@/components/TruthBadge";
+import type { DistrictDashboard, SourceHealth, BatchSimulation, ProjectProposal } from "@/lib/api/contracts";
+import { useRuntimeTruth } from "@/lib/runtime-truth-context";
 import { RequireAuth } from "@/lib/api/auth-context";
 import {
   LayoutDashboard,
@@ -32,39 +34,50 @@ export default function AdminPortalPage() {
 }
 
 function DistrictAdminWorkspace() {
+  const { truthState } = useRuntimeTruth();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "batch_planner" | "project_builder" | "sources">("overview");
-  const [dashboard, setDashboard] = useState<any>(null);
-  const [sources, setSources] = useState<any[]>([]);
-  const [batchResult, setBatchResult] = useState<any>(null);
-  const [proposalResult, setProposalResult] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<DistrictDashboard | null>(null);
+  const [sources, setSources] = useState<SourceHealth[]>([]);
+  const [batchResult, setBatchResult] = useState<BatchSimulation | null>(null);
+  const [proposalResult, setProposalResult] = useState<ProjectProposal | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [isBuildingProposal, setIsBuildingProposal] = useState(false);
+
+  const [simulationError, setSimulationError] = useState<string | null>(null);
+  const [proposalError, setProposalError] = useState<string | null>(null);
 
   // Batch simulator form
   const [proposedCapacity, setProposedCapacity] = useState<number>(30);
   const [selectedQp, setSelectedQp] = useState<string>("ASC/Q1411");
 
-  useEffect(() => {
-    getDistrictDashboard("MH-NAG").then(setDashboard).catch(console.warn);
-    getSourceHealth().then(setSources).catch(console.warn);
-  }, []);
+  const loadDashboard = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [overview, health] = await Promise.all([getDistrictDashboard("MH-NAG"), getSourceHealth()]);
+      setDashboard(overview);
+      setSources(health);
+    } catch (error: unknown) {
+      setDashboard(null);
+      setSources([]);
+      setLoadError(error instanceof Error ? error.message : "Could not load district records.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void loadDashboard(); }, []);
 
   const handleSimulateBatch = async () => {
     setIsSimulating(true);
+    setSimulationError(null);
     try {
       const res = await simulateBatch("MH-NAG", selectedQp, proposedCapacity);
       setBatchResult(res);
-    } catch (e) {
-      console.warn("Using local simulation:", e);
-      setBatchResult({
-        qp_code: selectedQp,
-        proposed_capacity: proposedCapacity,
-        eligible_candidate_pool: 84,
-        unmet_local_demand: 110,
-        absorption_rate_estimate: "92%",
-        fiscal_estimate_inr: proposedCapacity * 15000,
-        feasibility_status: "High Feasibility (Approved for GIA Proposal)"
-      });
+    } catch (e: any) {
+      console.warn("Simulation call error:", e);
+      setSimulationError(e?.message || "Batch simulation failed. Previous result is unchanged; retry.");
     } finally {
       setIsSimulating(false);
     }
@@ -72,6 +85,7 @@ function DistrictAdminWorkspace() {
 
   const handleBuildProposal = async () => {
     setIsBuildingProposal(true);
+    setProposalError(null);
     try {
       const res = await buildProjectProposal({
         project_title: "Nagpur District SC Youth Automotive & Green Energy Empowerment Project",
@@ -81,33 +95,24 @@ function DistrictAdminWorkspace() {
         estimated_budget_inr: 4500000.0
       });
       setProposalResult(res);
-    } catch (e) {
-      console.warn("Using local proposal:", e);
-      setProposalResult({
-        project_title: "Nagpur District SC Youth Automotive & Green Energy Empowerment Project",
-        target_district: "MH-NAG",
-        target_beneficiary_count: 120,
-        allocated_budget: "₹45,00,000",
-        governance_status: "Draft Simulation — Pending State Committee Approval",
-        truth_state: "DRAFT"
-      });
+    } catch (e: any) {
+      console.warn("Project proposal call error:", e);
+      setProposalError(e?.message || "Proposal generation failed. Previous result is unchanged; retry.");
     } finally {
       setIsBuildingProposal(false);
     }
   };
 
-  const demandSupplyData = [
-    { trade: "Automotive Service Technician", demand: 320, supply: 140, gap: -180, priority: "Critical (उच्च)" },
-    { trade: "Solar PV Rooftop Installer", demand: 210, supply: 65, gap: -145, priority: "Critical (उच्च)" },
-    { trade: "Self Employed Tailor", demand: 180, supply: 130, gap: -50, priority: "Moderate (मध्यम)" },
-    { trade: "CNC Machine Operator", demand: 150, supply: 90, gap: -60, priority: "Moderate (मध्यम)" }
-  ];
+  const demandSupplyData = (dashboard?.sector_demand_matrix ?? []).map(row => ({
+    trade: row.sector, demand: row.expressed_demand_count, supply: row.local_capacity,
+    gap: row.gap, priority: row.gap > 0 ? "Review shortage" : "No recorded shortage"
+  }));
 
   return (
     <div className="bg-surface font-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar />
 
-      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 py-6 flex flex-col gap-6">
+      <main className="max-w-7xl w-full mx-auto px-4 md:px-6 pt-24 pb-6 flex flex-col gap-6">
         {/* District Admin Header Strip */}
         <div className="bg-surface-container rounded-2xl p-5 border border-surface-variant/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -115,7 +120,7 @@ function DistrictAdminWorkspace() {
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary font-bold">
                 District Administration & Perspective Planning Portal
               </span>
-              <TruthBadge state="LIVE" />
+              <TruthBadge state={dashboard?.truth_state ?? truthState} />
             </div>
             <h1 className="font-headline-md text-headline-md text-primary font-bold mt-1">
               नागपूर जिल्हा उपजीविका बुद्धिमत्ता केंद्र (District Livelihood Intelligence)
@@ -128,7 +133,7 @@ function DistrictAdminWorkspace() {
           <div className="flex items-center gap-2">
             <span className="px-3 py-1.5 rounded-xl bg-tertiary-fixed/40 border border-secondary/30 text-on-tertiary-container font-code-sm text-code-sm font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-secondary" />
-              NCVET / NQR Freshness: SLA Met
+              Source verification required
             </span>
           </div>
         </div>
@@ -159,27 +164,30 @@ function DistrictAdminWorkspace() {
         {/* TAB 1: Demand & Supply Gap Overview */}
         {activeTab === "overview" && (
           <div className="flex flex-col gap-5">
+            {loading && <p role="status">Loading district records…</p>}
+            {loadError && <div role="alert">{loadError} <button onClick={loadDashboard} className="min-h-11 underline">Retry</button></div>}
+            {!loading && !loadError && demandSupplyData.length === 0 && <p>No recorded demand or training capacity for this district.</p>}
             {/* KPI Cards Strip */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-variant/40 shadow-sm flex flex-col">
                 <span className="font-label-sm text-label-sm text-outline">जिल्हा नोंदणीकृत लाभार्थी</span>
-                <span className="font-headline-sm text-headline-sm text-primary font-bold mt-1">1,240</span>
-                <span className="font-code-sm text-code-sm text-secondary mt-0.5">PM-AJAY Eligible Base</span>
+                <span className="font-headline-sm text-headline-sm text-primary font-bold mt-1">{dashboard?.total_beneficiaries_onboarded.toLocaleString() ?? "—"}</span>
+                <span className="font-code-sm text-code-sm text-secondary mt-0.5">Registered profiles; eligibility not assessed</span>
               </div>
               <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-variant/40 shadow-sm flex flex-col">
                 <span className="font-label-sm text-label-sm text-outline">उद्योग रिक्त पदे (Demand)</span>
-                <span className="font-headline-sm text-headline-sm text-primary font-bold mt-1">860</span>
-                <span className="font-code-sm text-code-sm text-outline mt-0.5">Hingna & Butibori Hubs</span>
+                <span className="font-headline-sm text-headline-sm text-primary font-bold mt-1">{dashboard?.recorded_vacancies.toLocaleString() ?? "—"}</span>
+                <span className="font-code-sm text-code-sm text-outline mt-0.5">Recorded active vacancies</span>
               </div>
               <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-variant/40 shadow-sm flex flex-col">
                 <span className="font-label-sm text-label-sm text-outline">प्रशिक्षण बॅच क्षमता</span>
-                <span className="font-headline-sm text-headline-sm text-secondary font-bold mt-1">425</span>
-                <span className="font-code-sm text-code-sm text-outline mt-0.5">14 Empanelled Centers</span>
+                <span className="font-headline-sm text-headline-sm text-secondary font-bold mt-1">{dashboard?.total_batch_capacity.toLocaleString() ?? "—"}</span>
+                <span className="font-code-sm text-code-sm text-outline mt-0.5">{dashboard ? `${dashboard.active_training_centers} recorded centers` : "—"}</span>
               </div>
               <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-variant/40 shadow-sm flex flex-col">
                 <span className="font-label-sm text-label-sm text-outline">निव्वळ तूट (Net Gap)</span>
-                <span className="font-headline-sm text-headline-sm text-error font-bold mt-1">-435</span>
-                <span className="font-code-sm text-code-sm text-error mt-0.5">Immediate Intervention Required</span>
+                <span className="font-headline-sm text-headline-sm text-error font-bold mt-1">{dashboard ? demandSupplyData.reduce((sum, row) => sum + row.gap, 0).toLocaleString() : "—"}</span>
+                <span className="font-code-sm text-code-sm text-error mt-0.5">Recorded vacancy / training-seat comparison</span>
               </div>
             </div>
 
@@ -231,7 +239,7 @@ function DistrictAdminWorkspace() {
             <div className="flex items-center justify-between border-b border-surface-variant/30 pb-3">
               <div>
                 <span className="font-label-sm text-label-sm text-secondary font-bold uppercase tracking-wider">
-                  Simulation Engine • Predictive Planning
+                  Illustrative budget calculator
                 </span>
                 <h2 className="font-headline-sm text-headline-sm text-primary font-bold mt-0.5">
                   बॅच नियोजन व अवशोषण सिम्युलेटर (Batch Planning Simulator)
@@ -243,9 +251,22 @@ function DistrictAdminWorkspace() {
             <div className="p-3 rounded-xl bg-surface-container-high border border-outline-variant/60 flex items-center gap-2 text-on-surface font-body-sm text-body-sm">
               <AlertCircle className="w-4 h-4 text-secondary shrink-0" />
               <span>
-                <strong>DRAFT SIMULATION:</strong> हे सिम्युलेशन उपलब्ध उमेदवार डेटा व मागणीच्या आधारे आर्थिक अंदाज दर्शवते. अंतिम बॅच मंजुरीसाठी अधिकृत DSC स्वाक्षरी आवश्यक आहे.
+                <strong>DRAFT SIMULATION:</strong> Illustrative costs only. Candidate suitability, placement, official policy rates and funding have not been verified.
               </span>
             </div>
+
+            {simulationError && (
+              <div className="p-3 rounded-xl bg-error-container text-on-error-container flex items-center justify-between">
+                <span>{simulationError}</span>
+                <button
+                  type="button"
+                  onClick={() => setSimulationError(null)}
+                  className="px-2 py-0.5 text-xs bg-surface rounded"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -308,25 +329,25 @@ function DistrictAdminWorkspace() {
                   <div className="p-3 rounded-lg bg-surface-container-lowest border border-surface-variant/20">
                     <span className="font-label-sm text-label-sm text-outline">पात्र उमेदवार पूल:</span>
                     <p className="font-title-md text-title-md font-bold text-primary mt-1">
-                      {batchResult.eligible_candidate_pool || 84}
+                      {batchResult.feasibility_assessment.potential_candidate_pool_in_radius ?? "Not assessed"}
                     </p>
                   </div>
                   <div className="p-3 rounded-lg bg-surface-container-lowest border border-surface-variant/20">
                     <span className="font-label-sm text-label-sm text-outline">स्थानिक न भरलेली मागणी:</span>
                     <p className="font-title-md text-title-md font-bold text-secondary mt-1">
-                      {batchResult.unmet_local_demand || 110}
+                      Not assessed
                     </p>
                   </div>
                   <div className="p-3 rounded-lg bg-surface-container-lowest border border-surface-variant/20">
                     <span className="font-label-sm text-label-sm text-outline">अपेक्षित अवशोषण दर:</span>
                     <p className="font-title-md text-title-md font-bold text-on-tertiary-container mt-1">
-                      {batchResult.absorption_rate_estimate || "92%"}
+                      Not assessed
                     </p>
                   </div>
                   <div className="p-3 rounded-lg bg-surface-container-lowest border border-surface-variant/20">
                     <span className="font-label-sm text-label-sm text-outline">अंदाजे आर्थिक तरतूद:</span>
                     <p className="font-title-md text-title-md font-bold text-primary mt-1">
-                      ₹{(batchResult.fiscal_estimate_inr || proposedCapacity * 15000).toLocaleString()}
+                      ₹{batchResult.budget_breakdown_inr.total_batch_budget_inr.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -354,6 +375,19 @@ function DistrictAdminWorkspace() {
               नागपूर जिल्ह्यातील वंचित घटकांसाठी ऑटोमोबाइल व सौर ऊर्जा क्षेत्रातील एकत्रित प्रकल्प प्रस्ताव तयार करा.
             </p>
 
+            {proposalError && (
+              <div className="p-3 rounded-xl bg-error-container text-on-error-container flex items-center justify-between">
+                <span>{proposalError}</span>
+                <button
+                  type="button"
+                  onClick={() => setProposalError(null)}
+                  className="px-2 py-0.5 text-xs bg-surface rounded"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               disabled={isBuildingProposal}
@@ -380,26 +414,26 @@ function DistrictAdminWorkspace() {
                     {proposalResult.project_title}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-code-sm text-code-sm font-bold">
-                    {proposalResult.governance_status || "Draft Simulation"}
+                    {proposalResult.proposal_status}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="p-3 rounded-xl bg-surface-container-lowest">
                     <span className="font-label-sm text-label-sm text-outline">लक्ष्यित लाभार्थी संख्या:</span>
                     <p className="font-title-md text-title-md font-bold text-primary mt-1">
-                      {proposalResult.target_beneficiary_count} युवक
+                      {proposalResult.target_sc_beneficiaries} युवक
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-surface-container-lowest">
                     <span className="font-label-sm text-label-sm text-outline">अंदाजे अर्थसंकल्प:</span>
                     <p className="font-title-md text-title-md font-bold text-secondary mt-1">
-                      {proposalResult.allocated_budget || "₹४५,००,०००"}
+                      ₹{proposalResult.total_budget_inr.toLocaleString()}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-surface-container-lowest">
                     <span className="font-label-sm text-label-sm text-outline">प्रकल्प कालावधी:</span>
                     <p className="font-title-md text-title-md font-bold text-primary mt-1">
-                      १२ महिने (FY 2026-27)
+                      Not specified
                     </p>
                   </div>
                 </div>
@@ -416,22 +450,17 @@ function DistrictAdminWorkspace() {
             </span>
 
             <div className="flex flex-col gap-2.5">
-              {[
-                { source: "NCVET National Qualifications Register (NQR)", refresh: "Daily Sync (2 Oct 2026)", status: "Active (सक्रिय)" },
-                { source: "Ministry of Social Justice PM-AJAY Registry", refresh: "Hourly Pull", status: "Active (सक्रिय)" },
-                { source: "District Industries Center (DIC) Requisitions", refresh: "Live Webhook", status: "Active (सक्रिय)" },
-                { source: "Nagpur Rural Ward Livelihood Survey", refresh: "Weekly Batch", status: "Active (सक्रिय)" }
-              ].map((s, idx) => (
+              {sources.map((s, idx) => (
                 <div
                   key={idx}
                   className="p-3.5 rounded-xl bg-surface-container-low border border-surface-variant/30 flex items-center justify-between"
                 >
                   <div>
-                    <span className="font-title-md text-title-md text-primary font-bold">{s.source}</span>
-                    <p className="font-code-sm text-code-sm text-outline mt-0.5">{s.refresh}</p>
+                    <span className="font-title-md text-title-md text-primary font-bold">{s.source_name}</span>
+                    <p className="font-code-sm text-code-sm text-outline mt-0.5">{s.last_success_at ?? "No recorded synchronization"}</p>
                   </div>
                   <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed/50 text-on-tertiary-container font-label-sm text-label-sm font-semibold">
-                    ✓ {s.status}
+                    {s.quality_status}
                   </span>
                 </div>
               ))}

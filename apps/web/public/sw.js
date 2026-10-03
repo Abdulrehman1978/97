@@ -1,72 +1,42 @@
-// PM-AJAY Livelihood Intelligence Platform (LIP) - Service Worker
-// Offline Caching for Low-Connectivity & Village Field Use
+// Public assets only. Never cache private API data or route HTML.
+const CACHE_NAME = "lip-public-assets-v3";
+const STATIC_ASSETS = ["/offline.html", "/manifest.json", "/favicon.ico"];
 
-const CACHE_NAME = "lip-pwa-v1";
-const STATIC_ASSETS = [
-  "/",
-  "/interview",
-  "/passport",
-  "/pathways",
-  "/journey",
-  "/help",
-  "/field",
-  "/manifest.json",
-  "/favicon.ico"
-];
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("[LIP SW] Pre-caching static assets for offline readiness");
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+self.addEventListener("install", event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)));
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            console.log("[LIP SW] Removing old cache:", key);
-            return caches.delete(key);
-          }
-        })
-      );
-    })
-  );
-  self.clients.claim();
+self.addEventListener("activate", event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key.startsWith("lip-") && key !== CACHE_NAME).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
-self.addEventListener("fetch", (event) => {
-  // Network first, falling back to cache if offline
-  if (event.request.method !== "GET") return;
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful GET responses
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        // Fallback to cache if network fails
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // Default fallback for html navigation
-          if (event.request.headers.get("accept")?.includes("text/html")) {
-            return caches.match("/interview");
-          }
-        });
-      })
-  );
+self.addEventListener("fetch", event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || request.headers.has("Authorization") || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/") || request.headers.has("RSC") || url.searchParams.has("_rsc")) return;
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).catch(async () =>
+      (await caches.match("/offline.html")) || new Response("Connection required", { status: 503 })
+    ));
+    return;
+  }
+  const isPublicAsset = STATIC_ASSETS.includes(url.pathname) ||
+    url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/images/");
+  if (!isPublicAsset || url.search) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response.ok && response.type === "basic" && !/private|no-store/i.test(response.headers.get("Cache-Control") || "")) {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  })());
 });
